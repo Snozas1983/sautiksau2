@@ -1,28 +1,19 @@
 import { Phone, MapPin } from "lucide-react";
 import logo from "@/assets/logo.png";
 import heroBg from "@/assets/hero-bg.png";
-
 const Index = () => {
-  return (
-    <div className="min-h-screen">
+  return <div className="min-h-screen">
       {/* Hero Section */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-6 py-20 overflow-hidden">
         <div className="absolute inset-0 w-full h-full">
-          <img 
-            src={heroBg} 
-            alt="Massage studio interior" 
-            className="w-full h-full object-cover object-center"
-            style={{ objectPosition: 'center 45%' }}
-          />
+          <img src={heroBg} alt="Massage studio interior" className="w-full h-full object-cover object-center" style={{
+          objectPosition: 'center 45%'
+        }} />
           <div className="absolute inset-0 bg-background/40" />
         </div>
         <div className="relative z-10 max-w-2xl w-full text-center space-y-8">
           <div className="space-y-6">
-            <img 
-              src={logo} 
-              alt="SAU TIK SAU masažo studija" 
-              className="w-64 md:w-80 mx-auto"
-            />
+            <img src={logo} alt="SAU TIK SAU masažo studija" className="w-64 md:w-80 mx-auto" />
           </div>
           
           <div className="h-px w-24 mx-auto bg-border" />
@@ -32,10 +23,7 @@ const Index = () => {
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-8">
-            <a 
-              href="tel:+37062082478" 
-              className="flex items-center gap-2 text-foreground hover:text-muted-foreground transition-colors"
-            >
+            <a href="tel:+37062082478" className="flex items-center gap-2 text-foreground hover:text-muted-foreground transition-colors">
               <Phone size={18} />
               <span className="font-light">+370 620 82478</span>
             </a>
@@ -87,7 +75,9 @@ const Index = () => {
             
             <div className="space-y-4 pb-12 border-b border-border">
               <div className="flex flex-col md:flex-row md:justify-between md:items-baseline gap-3">
-                <h3 className="text-2xl font-light" style={{ maxWidth: 'calc(100% - 50px)' }}>CHIRO IQ atpalaiduojantis / stangrinantis / formuojantis / anticeliulitinis kūno masažas</h3>
+                <h3 style={{
+                maxWidth: 'calc(100% - 50px)'
+              }} className="text-2xl font-light text-left pb-0 pr-[20px]">CHIRO IQ atpalaiduojantis / stangrinantis / formuojantis / anticeliulitinis kūno masažas</h3>
                 <div className="flex items-baseline gap-4">
                   <span className="text-muted-foreground font-light">90 min</span>
                   <span className="text-2xl font-light">80 €</span>
@@ -131,10 +121,7 @@ const Index = () => {
               <p className="text-sm tracking-[0.2em] text-muted-foreground uppercase">
                 Telefonas
               </p>
-              <a 
-                href="tel:+37062082478" 
-                className="text-2xl font-light hover:text-muted-foreground transition-colors"
-              >
+              <a href="tel:+37062082478" className="text-2xl font-light hover:text-muted-foreground transition-colors">
                 +370 620 82478
               </a>
             </div>
@@ -157,20 +144,10 @@ const Index = () => {
                 Socialiniai tinklai
               </p>
               <div className="flex justify-center gap-6">
-                <a 
-                  href="#" 
-                  className="text-lg font-light hover:text-muted-foreground transition-colors"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a href="#" className="text-lg font-light hover:text-muted-foreground transition-colors" target="_blank" rel="noopener noreferrer">
                   Facebook
                 </a>
-                <a 
-                  href="#" 
-                  className="text-lg font-light hover:text-muted-foreground transition-colors"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a href="#" className="text-lg font-light hover:text-muted-foreground transition-colors" target="_blank" rel="noopener noreferrer">
                   Instagram
                 </a>
               </div>
@@ -187,8 +164,6 @@ const Index = () => {
           </p>
         </div>
       </footer>
-    </div>
-  );
+    </div>;
 };
-
 export default Index;
