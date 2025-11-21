@@ -1,12 +1,22 @@
 import { Phone, MapPin } from "lucide-react";
 import logo from "@/assets/logo.png";
+import heroBg from "@/assets/hero-bg.png";
 
 const Index = () => {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="min-h-screen flex flex-col items-center justify-center px-6 py-20">
-        <div className="max-w-2xl w-full text-center space-y-8">
+      <section className="relative min-h-screen flex flex-col items-center justify-center px-6 py-20 overflow-hidden">
+        <div className="absolute inset-0 w-full h-full">
+          <img 
+            src={heroBg} 
+            alt="Massage studio interior" 
+            className="w-full h-full object-cover object-center"
+            style={{ objectPosition: 'center 45%' }}
+          />
+          <div className="absolute inset-0 bg-background/40" />
+        </div>
+        <div className="relative z-10 max-w-2xl w-full text-center space-y-8">
           <div className="space-y-6">
             <img 
               src={logo} 
