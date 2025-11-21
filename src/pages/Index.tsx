@@ -16,7 +16,7 @@ const Index = () => {
             <img src={logo} alt="SAU TIK SAU masažo studija" className="w-64 md:w-80 mx-auto" />
           </div>
           
-          <div className="h-px w-24 mx-auto bg-border" />
+          <div className="h-px w-24 mx-auto bg-stone-400" />
           
           <p className="text-lg md:text-xl font-light leading-relaxed text-foreground max-w-xl mx-auto">
             Minimalistinio japoniško stiliaus masažo erdvė Domeikavoje
