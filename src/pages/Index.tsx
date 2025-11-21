@@ -77,9 +77,9 @@ const Index = () => {
           <div className="space-y-12">
             <div className="space-y-4 pb-12 border-b border-border">
               <div className="flex flex-col md:flex-row md:justify-between md:items-baseline gap-3">
-                <h3 className="text-2xl font-light">Kobido veido masažas</h3>
+                <h3 className="text-2xl font-light">Imperatoriškasis Konido veido masažas</h3>
                 <div className="flex items-baseline gap-4">
-                  <span className="text-muted-foreground font-light">60 min</span>
+                  <span className="text-muted-foreground font-light">70 min</span>
                   <span className="text-2xl font-light">60 €</span>
                 </div>
               </div>
@@ -87,7 +87,7 @@ const Index = () => {
             
             <div className="space-y-4 pb-12 border-b border-border">
               <div className="flex flex-col md:flex-row md:justify-between md:items-baseline gap-3">
-                <h3 className="text-2xl font-light">Anti celiulitinis kūno masažas</h3>
+                <h3 className="text-2xl font-light">CHIRO IQ atpalaiduojantis / stangrinantis / formuojantis / anticeliulitinis kūno masažas</h3>
                 <div className="flex items-baseline gap-4">
                   <span className="text-muted-foreground font-light">90 min</span>
                   <span className="text-2xl font-light">80 €</span>
