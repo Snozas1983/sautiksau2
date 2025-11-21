@@ -1,4 +1,5 @@
 import { Phone, MapPin } from "lucide-react";
+import logo from "@/assets/logo.png";
 
 const Index = () => {
   return (
@@ -6,13 +7,12 @@ const Index = () => {
       {/* Hero Section */}
       <section className="min-h-screen flex flex-col items-center justify-center px-6 py-20">
         <div className="max-w-2xl w-full text-center space-y-8">
-          <div className="space-y-3">
-            <h1 className="text-6xl md:text-7xl font-light tracking-wider text-foreground">
-              SAU TIK SAU
-            </h1>
-            <p className="text-sm tracking-[0.3em] text-muted-foreground uppercase">
-              masažo studija
-            </p>
+          <div className="space-y-6">
+            <img 
+              src={logo} 
+              alt="SAU TIK SAU masažo studija" 
+              className="w-64 md:w-80 mx-auto"
+            />
           </div>
           
           <div className="h-px w-24 mx-auto bg-border" />
