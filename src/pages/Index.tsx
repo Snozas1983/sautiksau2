@@ -96,11 +96,10 @@ const Index = () => {
           </h2>
           <div className="text-center space-y-6">
             <p className="text-lg font-light leading-relaxed text-muted-foreground">
-              Artimiausioje ateityje planuojame organizuoti moterų vakarus, bendradarbiauti su 
-              makiažo meistrais bei kurti savo kosmetikos produktų liniją.
+              Artimiausioje ateityje planuojame organizuoti moterų vakarus, bendradarbiauti su makiažo meistrais ir kitais grožio specialistais.           
             </p>
             <p className="text-lg font-light leading-relaxed text-muted-foreground">
-              Kūno aparatinis masažas (vinrosferos)
+              Kūno aparatinis masažas (vibrosferos)
             </p>
             <p className="text-lg font-light leading-relaxed text-muted-foreground">
               Stebėkite naujienas ir būkite kartu su mumis šioje kelionėje.
