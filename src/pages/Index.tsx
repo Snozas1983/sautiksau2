@@ -146,7 +146,7 @@ const Index = () => {
                 <a href="https://www.facebook.com/sautiksau" className="text-lg font-light hover:text-muted-foreground transition-colors" target="_blank" rel="noopener noreferrer">
                   Facebook
                 </a>
-                <a href="#" className="text-lg font-light hover:text-muted-foreground transition-colors" target="_blank" rel="noopener noreferrer">
+                <a href="https://www.instagram.com/sautiksaumasazas/#" className="text-lg font-light hover:text-muted-foreground transition-colors" target="_blank" rel="noopener noreferrer">
                   Instagram
                 </a>
               </div>
