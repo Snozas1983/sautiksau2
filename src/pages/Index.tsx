@@ -143,7 +143,7 @@ const Index = () => {
                 Socialiniai tinklai
               </p>
               <div className="flex justify-center gap-6">
-                <a href="#" className="text-lg font-light hover:text-muted-foreground transition-colors" target="_blank" rel="noopener noreferrer">
+                <a href="https://www.facebook.com/sautiksau" className="text-lg font-light hover:text-muted-foreground transition-colors" target="_blank" rel="noopener noreferrer">
                   Facebook
                 </a>
                 <a href="#" className="text-lg font-light hover:text-muted-foreground transition-colors" target="_blank" rel="noopener noreferrer">
