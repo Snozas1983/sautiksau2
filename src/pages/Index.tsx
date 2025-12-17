@@ -37,6 +37,16 @@ const Index = () => {
         </div>
       </section>
 
+      {/* Services & Booking Section */}
+      <section className="py-32 px-6 border-t border-border bg-booking-bg">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-3xl md:text-4xl font-light text-center mb-16 tracking-wide text-booking-foreground">
+            Paslaugos
+          </h2>
+          <BookingSection />
+        </div>
+      </section>
+
       {/* About Section */}
       <section className="py-32 px-6 border-t border-border">
         <div className="max-w-3xl mx-auto">
@@ -54,16 +64,6 @@ const Index = () => {
               Čia nėra skubėjimo, tik profesionali priežiūra ir erdvė atsigavimui.
             </p>
           </div>
-        </div>
-      </section>
-
-      {/* Services & Booking Section */}
-      <section className="py-32 px-6 border-t border-border bg-booking-bg">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl md:text-4xl font-light text-center mb-16 tracking-wide text-booking-foreground">
-            Paslaugos
-          </h2>
-          <BookingSection />
         </div>
       </section>
 

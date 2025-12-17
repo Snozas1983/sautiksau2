@@ -10,7 +10,7 @@ export const services: Service[] = [
   },
   {
     id: 'chiro-iq',
-    name: 'CHIRO IQ kūno masažas',
+    name: 'CHIRO IQ kūno atpalaiduojantis/stangrinantis/anticeliulitinis masažas',
     duration: 90,
     price: 80,
   },

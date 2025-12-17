@@ -19,13 +19,13 @@ export const ServiceSelector = ({
           key={service.id}
           onClick={() => onSelectService(service)}
           className={cn(
-            'w-full text-left pb-12 transition-all duration-200',
+            'w-full text-left pb-12 transition-all duration-200 group',
             index < services.length - 1 && 'border-b border-booking-border',
-            'hover:opacity-70 focus:outline-none'
+            'focus:outline-none'
           )}
         >
           <div className="flex flex-col md:flex-row md:justify-between md:items-baseline gap-3">
-            <h3 className="text-2xl font-light text-booking-foreground">
+            <h3 className="text-2xl font-light text-booking-foreground transition-all duration-200 group-hover:font-medium">
               {service.name}
             </h3>
             <div className="flex items-baseline gap-4">
