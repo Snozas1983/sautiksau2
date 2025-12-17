@@ -38,9 +38,9 @@ const Index = () => {
       </section>
 
       {/* Services & Booking Section */}
-      <section className="py-32 px-6 border-t border-border bg-booking-bg">
+      <section className="py-16 md:py-32 px-4 md:px-6 border-t border-border bg-booking-bg">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl md:text-4xl font-light text-center mb-16 tracking-wide text-booking-foreground">
+          <h2 className="text-2xl md:text-4xl font-light text-center mb-8 md:mb-16 tracking-wide text-booking-foreground">
             Paslaugos
           </h2>
           <BookingSection />
