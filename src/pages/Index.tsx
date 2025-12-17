@@ -1,6 +1,7 @@
 import { Phone, MapPin } from "lucide-react";
 import logo from "@/assets/logo.png";
 import heroBg from "@/assets/hero-bg.png";
+import { BookingSection } from "@/components/booking/BookingSection";
 const Index = () => {
   return <div className="min-h-screen">
       {/* Hero Section */}
@@ -86,6 +87,11 @@ const Index = () => {
             </div>
           </div>
         </div>
+      </section>
+
+      {/* Booking Section */}
+      <section id="booking" className="py-32 px-6 border-t border-border bg-booking-bg">
+        <BookingSection />
       </section>
 
       {/* Future Plans Section */}

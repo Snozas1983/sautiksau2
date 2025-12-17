@@ -40,20 +40,21 @@ All colors MUST be HSL.
     --radius: 0;
 
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
     --sidebar-accent-foreground: 240 5.9% 10%;
-
     --sidebar-border: 220 13% 91%;
-
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Booking section colors (light mode - not used but defined for consistency) */
+    --booking-bg: 35 20% 97%;
+    --booking-surface: 35 15% 92%;
+    --booking-foreground: 30 10% 15%;
+    --booking-muted: 30 8% 45%;
+    --booking-border: 35 10% 88%;
+    --booking-available: 140 35% 45%;
   }
 
   .dark {
@@ -92,6 +93,14 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 35 20% 97%;
     --sidebar-border: 30 8% 25%;
     --sidebar-ring: 140 15% 50%;
+
+    /* Booking section colors (dark mode - premium dark theme) */
+    --booking-bg: 0 0% 6%;
+    --booking-surface: 0 0% 10%;
+    --booking-foreground: 35 15% 92%;
+    --booking-muted: 35 10% 55%;
+    --booking-border: 0 0% 18%;
+    --booking-available: 140 35% 50%;
   }
 }
 

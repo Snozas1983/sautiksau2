@@ -60,6 +60,14 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        booking: {
+          bg: "hsl(var(--booking-bg))",
+          surface: "hsl(var(--booking-surface))",
+          foreground: "hsl(var(--booking-foreground))",
+          muted: "hsl(var(--booking-muted))",
+          border: "hsl(var(--booking-border))",
+          available: "hsl(var(--booking-available))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
