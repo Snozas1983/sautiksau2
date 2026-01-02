@@ -19,12 +19,10 @@ interface SettingsData {
   'booking_days_ahead': string;
   'deposit_amount': string;
   'cancel_hours_before': string;
-  'admin_password': string;
 }
 
 export function SettingsTab({ adminPassword }: SettingsTabProps) {
   const [formData, setFormData] = useState<Partial<SettingsData>>({});
-  const [newPassword, setNewPassword] = useState('');
   const queryClient = useQueryClient();
   
   const { data: settings, isLoading } = useQuery({
@@ -66,14 +64,7 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
   });
   
   const handleSave = () => {
-    const dataToSave: Record<string, string> = { ...formData };
-    
-    if (newPassword.trim()) {
-      dataToSave['admin_password'] = newPassword;
-    }
-    
-    saveMutation.mutate(dataToSave);
-    setNewPassword('');
+    saveMutation.mutate(formData as Record<string, string>);
   };
   
   if (isLoading) {
@@ -152,24 +143,6 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
               type="number"
               value={formData['cancel_hours_before'] || ''}
               onChange={(e) => setFormData({ ...formData, 'cancel_hours_before': e.target.value })}
-            />
-          </div>
-        </CardContent>
-      </Card>
-      
-      {/* Password Change */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Slaptažodžio keitimas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <Label>Naujas slaptažodis</Label>
-            <Input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              placeholder="Palikite tuščią, jei nenorite keisti"
             />
           </div>
         </CardContent>

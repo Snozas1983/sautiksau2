@@ -46,10 +46,9 @@ async function getSettings() {
   return settings;
 }
 
-// Verify admin password
-async function verifyAdminPassword(password: string): Promise<boolean> {
-  const settings = await getSettings();
-  const adminPassword = settings['admin_password'];
+// Verify admin password using Supabase Secret
+function verifyAdminPassword(password: string): boolean {
+  const adminPassword = Deno.env.get('ADMIN_PASSWORD');
   return password === adminPassword;
 }
 
@@ -197,7 +196,7 @@ serve(async (req) => {
     // POST /admin/login - Verify admin password
     if (path === '/admin/login' && req.method === 'POST') {
       const body = await req.json();
-      const isValid = await verifyAdminPassword(body.password);
+      const isValid = verifyAdminPassword(body.password);
       
       return new Response(JSON.stringify({ success: isValid }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -206,7 +205,7 @@ serve(async (req) => {
 
     // Check admin auth for other admin endpoints
     if (path.startsWith('/admin/') && path !== '/admin/login') {
-      if (!adminPassword || !(await verifyAdminPassword(adminPassword))) {
+      if (!adminPassword || !verifyAdminPassword(adminPassword)) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
