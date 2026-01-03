@@ -34,6 +34,7 @@ export function useAdminServices(adminPassword: string) {
     queryFn: async () => {
       const response = await fetch(`${API_URL}/admin/services`, {
         headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           'x-admin-password': adminPassword,
         },
       });
@@ -54,6 +55,7 @@ export function useAdminServices(adminPassword: string) {
       const response = await fetch(`${API_URL}/admin/services`, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           'Content-Type': 'application/json',
           'x-admin-password': adminPassword,
         },
@@ -77,6 +79,7 @@ export function useAdminServices(adminPassword: string) {
       const response = await fetch(`${API_URL}/admin/services/${id}`, {
         method: 'PUT',
         headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           'Content-Type': 'application/json',
           'x-admin-password': adminPassword,
         },
@@ -100,6 +103,7 @@ export function useAdminServices(adminPassword: string) {
       const response = await fetch(`${API_URL}/admin/services/${id}`, {
         method: 'DELETE',
         headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           'x-admin-password': adminPassword,
         },
       });
