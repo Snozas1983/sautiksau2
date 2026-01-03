@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +13,18 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { AdminService, ServiceFormData } from '@/hooks/useAdminServices';
+
+const serviceSchema = z.object({
+  name: z.string().trim().min(1, 'Pavadinimas privalomas').max(100, 'Pavadinimas per ilgas'),
+  duration: z.number().min(15, 'Trukmė turi būti bent 15 min'),
+  preparationTime: z.number().min(0, 'Paruošimo laikas negali būti neigiamas'),
+  price: z.number().min(0.01, 'Kaina turi būti teigiama'),
+  isActive: z.boolean(),
+  description: z.string().max(500, 'Aprašymas per ilgas').optional(),
+  sortOrder: z.number().min(1, 'Rikiavimo eilė turi būti bent 1'),
+});
+
+type ValidationErrors = Partial<Record<keyof ServiceFormData, string>>;
 
 interface ServiceFormDialogProps {
   open: boolean;
@@ -37,6 +50,7 @@ export function ServiceFormDialog({
     description: '',
     sortOrder: 1,
   });
+  const [errors, setErrors] = useState<ValidationErrors>({});
 
   useEffect(() => {
     if (service) {
@@ -60,10 +74,24 @@ export function ServiceFormDialog({
         sortOrder: 1,
       });
     }
+    setErrors({});
   }, [service, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const result = serviceSchema.safeParse(formData);
+    if (!result.success) {
+      const fieldErrors: ValidationErrors = {};
+      result.error.errors.forEach((err) => {
+        const field = err.path[0] as keyof ServiceFormData;
+        fieldErrors[field] = err.message;
+      });
+      setErrors(fieldErrors);
+      return;
+    }
+    
+    setErrors({});
     await onSave(formData);
     onOpenChange(false);
   };
@@ -84,8 +112,9 @@ export function ServiceFormDialog({
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              required
+              className={errors.name ? 'border-destructive' : ''}
             />
+            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
           </div>
 
           <div className="space-y-2">
@@ -95,7 +124,9 @@ export function ServiceFormDialog({
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
+              className={errors.description ? 'border-destructive' : ''}
             />
+            {errors.description && <p className="text-xs text-destructive">{errors.description}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -104,11 +135,12 @@ export function ServiceFormDialog({
               <Input
                 id="duration"
                 type="number"
-                min={1}
+                min={15}
                 value={formData.duration}
                 onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 0 })}
-                required
+                className={errors.duration ? 'border-destructive' : ''}
               />
+              {errors.duration && <p className="text-xs text-destructive">{errors.duration}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="preparationTime">Paruošimo laikas (min)</Label>
@@ -118,7 +150,9 @@ export function ServiceFormDialog({
                 min={0}
                 value={formData.preparationTime}
                 onChange={(e) => setFormData({ ...formData, preparationTime: parseInt(e.target.value) || 0 })}
+                className={errors.preparationTime ? 'border-destructive' : ''}
               />
+              {errors.preparationTime && <p className="text-xs text-destructive">{errors.preparationTime}</p>}
             </div>
           </div>
 
@@ -141,12 +175,13 @@ export function ServiceFormDialog({
               <Input
                 id="price"
                 type="number"
-                min={0}
+                min={0.01}
                 step={0.01}
                 value={formData.price}
                 onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
-                required
+                className={errors.price ? 'border-destructive' : ''}
               />
+              {errors.price && <p className="text-xs text-destructive">{errors.price}</p>}
             </div>
           </div>
 
@@ -159,7 +194,9 @@ export function ServiceFormDialog({
                 min={1}
                 value={formData.sortOrder}
                 onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) || 1 })}
+                className={errors.sortOrder ? 'border-destructive' : ''}
               />
+              {errors.sortOrder && <p className="text-xs text-destructive">{errors.sortOrder}</p>}
             </div>
             <div className="flex items-center space-x-2 pt-6">
               <Switch
