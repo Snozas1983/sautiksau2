@@ -420,6 +420,96 @@ serve(async (req) => {
       });
     }
 
+    // GET /admin/services - Get all services from Airtable (including inactive)
+    if (path === '/admin/services' && req.method === 'GET') {
+      console.log('Fetching all services from Airtable...');
+      const data = await airtableRequest('/Services?sort[0][field]=Sort order&sort[0][direction]=asc');
+      
+      const services = data.records.map((record: any) => ({
+        id: record.id,
+        name: record.fields['Service name'] || '',
+        duration: record.fields['Duration (minutes)'] || 0,
+        preparationTime: record.fields['Preparation (minutes)'] || 0,
+        bookingTime: record.fields['Booking time (minutes)'] || 0,
+        price: record.fields['Regular price (EUR)'] || 0,
+        isActive: record.fields['Active?'] ?? true,
+        description: record.fields['Description'] || '',
+        sortOrder: record.fields['Sort order'] || 1,
+      }));
+      
+      return new Response(JSON.stringify({ services }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // POST /admin/services - Create new service in Airtable
+    if (path === '/admin/services' && req.method === 'POST') {
+      const body = await req.json();
+      console.log('Creating new service:', body);
+      
+      const data = await airtableRequest('/Services', {
+        method: 'POST',
+        body: JSON.stringify({
+          records: [{
+            fields: {
+              'Service name': body.name,
+              'Duration (minutes)': body.duration,
+              'Preparation (minutes)': body.preparationTime,
+              'Booking time (minutes)': body.bookingTime,
+              'Regular price (EUR)': body.price,
+              'Active?': body.isActive,
+              'Description': body.description,
+              'Sort order': body.sortOrder,
+            }
+          }]
+        }),
+      });
+      
+      return new Response(JSON.stringify({ success: true, service: data.records[0] }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // PUT /admin/services/:id - Update service in Airtable
+    if (path.match(/^\/admin\/services\/[^/]+$/) && req.method === 'PUT') {
+      const serviceId = path.split('/').pop();
+      const body = await req.json();
+      console.log('Updating service:', serviceId, body);
+      
+      const fields: any = {};
+      if (body.name !== undefined) fields['Service name'] = body.name;
+      if (body.duration !== undefined) fields['Duration (minutes)'] = body.duration;
+      if (body.preparationTime !== undefined) fields['Preparation (minutes)'] = body.preparationTime;
+      if (body.bookingTime !== undefined) fields['Booking time (minutes)'] = body.bookingTime;
+      if (body.price !== undefined) fields['Regular price (EUR)'] = body.price;
+      if (body.isActive !== undefined) fields['Active?'] = body.isActive;
+      if (body.description !== undefined) fields['Description'] = body.description;
+      if (body.sortOrder !== undefined) fields['Sort order'] = body.sortOrder;
+      
+      await airtableRequest(`/Services/${serviceId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ fields }),
+      });
+      
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // DELETE /admin/services/:id - Delete service from Airtable
+    if (path.match(/^\/admin\/services\/[^/]+$/) && req.method === 'DELETE') {
+      const serviceId = path.split('/').pop();
+      console.log('Deleting service:', serviceId);
+      
+      await airtableRequest(`/Services/${serviceId}`, {
+        method: 'DELETE',
+      });
+      
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // POST /admin/sync-services - Sync services from Airtable to Supabase
     if (path === '/admin/sync-services' && req.method === 'POST') {
       console.log('Starting services sync from Airtable to Supabase...');

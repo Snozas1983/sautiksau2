@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Settings, LogOut } from 'lucide-react';
+import { Calendar, Settings, LogOut, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { CalendarTab } from '@/components/admin/CalendarTab';
 import { SettingsTab } from '@/components/admin/SettingsTab';
+import { ServicesTab } from '@/components/admin/ServicesTab';
 
-type Tab = 'calendar' | 'settings';
+type Tab = 'calendar' | 'services' | 'settings';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState<Tab>('calendar');
@@ -53,6 +54,9 @@ const AdminDashboard = () => {
         {activeTab === 'calendar' && adminPassword && (
           <CalendarTab adminPassword={adminPassword} />
         )}
+        {activeTab === 'services' && adminPassword && (
+          <ServicesTab adminPassword={adminPassword} />
+        )}
         {activeTab === 'settings' && adminPassword && (
           <SettingsTab adminPassword={adminPassword} />
         )}
@@ -67,6 +71,14 @@ const AdminDashboard = () => {
         >
           <Calendar className="w-5 h-5" />
           <span className="text-xs">Kalendorius</span>
+        </Button>
+        <Button
+          variant={activeTab === 'services' ? 'secondary' : 'ghost'}
+          className="flex-1 flex flex-col items-center gap-1 h-auto py-2"
+          onClick={() => setActiveTab('services')}
+        >
+          <List className="w-5 h-5" />
+          <span className="text-xs">Paslaugos</span>
         </Button>
         <Button
           variant={activeTab === 'settings' ? 'secondary' : 'ghost'}
