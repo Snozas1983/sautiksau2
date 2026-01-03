@@ -86,7 +86,8 @@ export function ServicesTab({ adminPassword }: ServicesTabProps) {
         toast.success('Paslauga sukurta');
       }
     } catch (error) {
-      toast.error('Nepavyko išsaugoti paslaugos');
+      const message = error instanceof Error ? error.message : '';
+      toast.error(message ? `Nepavyko išsaugoti: ${message}` : 'Nepavyko išsaugoti paslaugos');
       throw error;
     }
   };
@@ -105,7 +106,8 @@ export function ServicesTab({ adminPassword }: ServicesTabProps) {
       });
       toast.success(service.isActive ? 'Paslauga deaktyvuota' : 'Paslauga aktyvuota');
     } catch (error) {
-      toast.error('Nepavyko pakeisti būsenos');
+      const message = error instanceof Error ? error.message : '';
+      toast.error(message ? `Nepavyko pakeisti būsenos: ${message}` : 'Nepavyko pakeisti būsenos');
     }
   };
 

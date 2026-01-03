@@ -37,11 +37,12 @@ export function useAdminServices(adminPassword: string) {
           'x-admin-password': adminPassword,
         },
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to fetch services');
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `Failed to fetch services (${response.status})`);
       }
-      
+
       const data = await response.json();
       return data.services as AdminService[];
     },
@@ -58,11 +59,12 @@ export function useAdminServices(adminPassword: string) {
         },
         body: JSON.stringify(service),
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to create service');
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `Failed to create service (${response.status})`);
       }
-      
+
       return response.json();
     },
     onSuccess: () => {
@@ -80,11 +82,12 @@ export function useAdminServices(adminPassword: string) {
         },
         body: JSON.stringify(service),
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to update service');
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `Failed to update service (${response.status})`);
       }
-      
+
       return response.json();
     },
     onSuccess: () => {
@@ -100,11 +103,12 @@ export function useAdminServices(adminPassword: string) {
           'x-admin-password': adminPassword,
         },
       });
-      
+
       if (!response.ok) {
-        throw new Error('Failed to delete service');
+        const text = await response.text().catch(() => '');
+        throw new Error(text || `Failed to delete service (${response.status})`);
       }
-      
+
       return response.json();
     },
     onSuccess: () => {

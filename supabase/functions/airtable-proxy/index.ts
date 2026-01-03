@@ -30,8 +30,8 @@ async function airtableRequest(endpoint: string, options: RequestInit = {}) {
   
   if (!response.ok) {
     const error = await response.text();
-    console.error('Airtable error:', error);
-    throw new Error(`Airtable error: ${response.status}`);
+    console.error('Airtable error:', { endpoint, status: response.status, error });
+    throw new Error(`Airtable error ${response.status}: ${error}`);
   }
   
   return response.json();
