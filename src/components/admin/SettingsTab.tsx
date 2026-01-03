@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, Loader2 } from 'lucide-react';
+import { Save, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { airtableApi } from '@/lib/airtable';
 import { toast } from 'sonner';
 
@@ -60,6 +60,26 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
     },
     onError: () => {
       toast.error('Klaida saugant nustatymus');
+    },
+  });
+
+  const syncServicesMutation = useMutation({
+    mutationFn: async () => {
+      const result = await airtableApi('/admin/sync-services', {
+        method: 'POST',
+      }, adminPassword);
+      return result;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+      if (data.errors && data.errors.length > 0) {
+        toast.warning(`Sinchronizuota ${data.synced}/${data.total} paslaugų (${data.errors.length} klaidos)`);
+      } else {
+        toast.success(`Sėkmingai sinchronizuota ${data.synced} paslaugos`);
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(`Klaida sinchronizuojant: ${error.message}`);
     },
   });
   
@@ -145,6 +165,31 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
               onChange={(e) => setFormData({ ...formData, 'cancel_hours_before': e.target.value })}
             />
           </div>
+        </CardContent>
+      </Card>
+      
+      {/* Services Sync */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Paslaugų sinchronizacija</CardTitle>
+          <CardDescription>
+            Atnaujinti paslaugų sąrašą iš Airtable į duomenų bazę
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button 
+            onClick={() => syncServicesMutation.mutate()}
+            disabled={syncServicesMutation.isPending}
+            variant="outline"
+            className="w-full"
+          >
+            {syncServicesMutation.isPending ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
+            )}
+            Atnaujinti paslaugas
+          </Button>
         </CardContent>
       </Card>
       

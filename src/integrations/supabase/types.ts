@@ -121,6 +121,7 @@ export type Database = {
       }
       services: {
         Row: {
+          airtable_id: string | null
           created_at: string
           duration: number
           id: string
@@ -129,6 +130,7 @@ export type Database = {
           price: number
         }
         Insert: {
+          airtable_id?: string | null
           created_at?: string
           duration: number
           id?: string
@@ -137,6 +139,7 @@ export type Database = {
           price: number
         }
         Update: {
+          airtable_id?: string | null
           created_at?: string
           duration?: number
           id?: string

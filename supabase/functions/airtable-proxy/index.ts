@@ -1,9 +1,13 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const AIRTABLE_API_TOKEN = Deno.env.get('AIRTABLE_API_TOKEN');
 const AIRTABLE_BASE_ID = 'app0sAtFcDVOIJgIJ';
 const AIRTABLE_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}`;
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -398,6 +402,90 @@ serve(async (req) => {
       }
       
       return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // POST /admin/sync-services - Sync services from Airtable to Supabase
+    if (path === '/admin/sync-services' && req.method === 'POST') {
+      console.log('Starting services sync from Airtable to Supabase...');
+      
+      // 1. Fetch all services from Airtable
+      const airtableData = await airtableRequest('/Services');
+      console.log(`Found ${airtableData.records.length} services in Airtable`);
+      
+      // 2. Create Supabase client with service role
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+      
+      let synced = 0;
+      let errors: string[] = [];
+      
+      // 3. Upsert each service
+      for (const record of airtableData.records) {
+        const serviceName = record.fields['Service name'];
+        const duration = record.fields['Duration (minutes)'];
+        const price = record.fields['Regular price (EUR)'];
+        const isActive = record.fields['Active?'] ?? true;
+        
+        if (!serviceName || !duration || price === undefined) {
+          console.log(`Skipping record ${record.id} - missing required fields`);
+          continue;
+        }
+        
+        // Check if service with this airtable_id exists
+        const { data: existingService } = await supabase
+          .from('services')
+          .select('id')
+          .eq('airtable_id', record.id)
+          .single();
+        
+        if (existingService) {
+          // Update existing
+          const { error } = await supabase
+            .from('services')
+            .update({
+              name: serviceName,
+              duration: duration,
+              price: price,
+              is_active: isActive,
+            })
+            .eq('airtable_id', record.id);
+          
+          if (error) {
+            console.error(`Error updating service ${record.id}:`, error);
+            errors.push(`Update ${serviceName}: ${error.message}`);
+          } else {
+            synced++;
+          }
+        } else {
+          // Insert new
+          const { error } = await supabase
+            .from('services')
+            .insert({
+              airtable_id: record.id,
+              name: serviceName,
+              duration: duration,
+              price: price,
+              is_active: isActive,
+            });
+          
+          if (error) {
+            console.error(`Error inserting service ${record.id}:`, error);
+            errors.push(`Insert ${serviceName}: ${error.message}`);
+          } else {
+            synced++;
+          }
+        }
+      }
+      
+      console.log(`Sync complete: ${synced} services synced, ${errors.length} errors`);
+      
+      return new Response(JSON.stringify({ 
+        success: errors.length === 0,
+        synced,
+        total: airtableData.records.length,
+        errors: errors.length > 0 ? errors : undefined,
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
