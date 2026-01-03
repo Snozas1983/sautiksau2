@@ -17,7 +17,7 @@ export interface ServiceFormData {
   name: string;
   duration: number;
   preparationTime: number;
-  bookingTime: number;
+  // bookingTime is a formula field in Airtable (Duration + Preparation) - read-only
   price: number;
   isActive: boolean;
   description: string;

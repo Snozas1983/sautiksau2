@@ -98,7 +98,6 @@ export function ServicesTab({ adminPassword }: ServicesTabProps) {
         name: service.name,
         duration: service.duration,
         preparationTime: service.preparationTime,
-        bookingTime: service.bookingTime,
         price: service.price,
         description: service.description,
         sortOrder: service.sortOrder,

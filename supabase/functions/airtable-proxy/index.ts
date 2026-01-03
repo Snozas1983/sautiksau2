@@ -455,7 +455,7 @@ serve(async (req) => {
               'Service name': body.name,
               'Duration (minutes)': body.duration,
               'Preparation (minutes)': body.preparationTime,
-              'Booking time (minutes)': body.bookingTime,
+              // 'Booking time (minutes)' is a formula field - don't write to it
               'Regular price (EUR)': body.price,
               'Active?': body.isActive,
               'Description': body.description,
@@ -480,7 +480,7 @@ serve(async (req) => {
       if (body.name !== undefined) fields['Service name'] = body.name;
       if (body.duration !== undefined) fields['Duration (minutes)'] = body.duration;
       if (body.preparationTime !== undefined) fields['Preparation (minutes)'] = body.preparationTime;
-      if (body.bookingTime !== undefined) fields['Booking time (minutes)'] = body.bookingTime;
+      // 'Booking time (minutes)' is a formula field - don't write to it
       if (body.price !== undefined) fields['Regular price (EUR)'] = body.price;
       if (body.isActive !== undefined) fields['Active?'] = body.isActive;
       if (body.description !== undefined) fields['Description'] = body.description;

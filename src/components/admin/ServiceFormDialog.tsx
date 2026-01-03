@@ -32,7 +32,6 @@ export function ServiceFormDialog({
     name: '',
     duration: 60,
     preparationTime: 10,
-    bookingTime: 70,
     price: 50,
     isActive: true,
     description: '',
@@ -45,7 +44,6 @@ export function ServiceFormDialog({
         name: service.name,
         duration: service.duration,
         preparationTime: service.preparationTime,
-        bookingTime: service.bookingTime,
         price: service.price,
         isActive: service.isActive,
         description: service.description,
@@ -56,7 +54,6 @@ export function ServiceFormDialog({
         name: '',
         duration: 60,
         preparationTime: 10,
-        bookingTime: 70,
         price: 50,
         isActive: true,
         description: '',
@@ -131,10 +128,13 @@ export function ServiceFormDialog({
               <Input
                 id="bookingTime"
                 type="number"
-                min={1}
-                value={formData.bookingTime}
-                onChange={(e) => setFormData({ ...formData, bookingTime: parseInt(e.target.value) || 0 })}
+                value={formData.duration + formData.preparationTime}
+                disabled
+                className="bg-muted cursor-not-allowed"
               />
+              <p className="text-xs text-muted-foreground">
+                Automatiškai: Trukmė + Paruošimas
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="price">Kaina (EUR)</Label>
