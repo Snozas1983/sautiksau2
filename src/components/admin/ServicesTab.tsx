@@ -23,6 +23,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useAdminServices, AdminService, ServiceFormData } from '@/hooks/useAdminServices';
+import { airtableApi } from '@/lib/airtable';
 
 interface ServicesTabProps {
   adminPassword: string;
@@ -202,24 +203,12 @@ export function ServicesTab({ adminPassword }: ServicesTabProps) {
   const handleSync = async () => {
     setIsSyncing(true);
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/airtable-proxy/admin/sync-services`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-            'x-admin-password': adminPassword,
-          },
-        }
+      const result = await airtableApi(
+        '/admin/sync-services',
+        { method: 'POST' },
+        adminPassword
       );
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        throw new Error(text || 'Sync failed');
-      }
-
-      const result = await response.json();
-      toast.success(`Sinchronizuota: ${result.synced} paslaugos`);
+      toast.success(`Sinchronizuota: ${result.synced ?? 0} paslaugos`);
       refetch();
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
