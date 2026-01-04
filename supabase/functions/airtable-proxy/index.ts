@@ -14,7 +14,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-admin-password',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-admin-password, x-admin-password-b64',
 };
 
 // Helper to make Airtable requests
@@ -57,6 +57,12 @@ async function getSettings() {
 function verifyAdminPassword(password: string): boolean {
   const adminPassword = Deno.env.get('ADMIN_PASSWORD');
   return password === adminPassword;
+}
+
+function decodeBase64Utf8(value: string): string {
+  const bin = atob(value);
+  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }
 
 serve(async (req) => {
@@ -209,13 +215,15 @@ serve(async (req) => {
 
     // ADMIN ENDPOINTS (require password)
 
-    const adminPassword = req.headers.get('x-admin-password');
+    const adminPasswordRaw = req.headers.get('x-admin-password');
+    const adminPasswordB64 = req.headers.get('x-admin-password-b64');
+    const adminPassword = adminPasswordB64 ? decodeBase64Utf8(adminPasswordB64) : adminPasswordRaw;
 
     // POST /admin/login - Verify admin password
     if (path === '/admin/login' && req.method === 'POST') {
       const body = await req.json();
       const isValid = verifyAdminPassword(body.password);
-      
+
       return new Response(JSON.stringify({ success: isValid }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

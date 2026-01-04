@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { airtableApi } from '@/lib/airtable';
 
 export interface AdminService {
   id: string;
@@ -24,27 +24,13 @@ export interface ServiceFormData {
   sortOrder: number;
 }
 
-const API_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/airtable-proxy`;
-
 export function useAdminServices(adminPassword: string) {
   const queryClient = useQueryClient();
 
   const servicesQuery = useQuery({
     queryKey: ['admin-services', adminPassword],
     queryFn: async () => {
-      const response = await fetch(`${API_URL}/admin/services`, {
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          'x-admin-password': adminPassword,
-        },
-      });
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        throw new Error(text || `Failed to fetch services (${response.status})`);
-      }
-
-      const data = await response.json();
+      const data = await airtableApi('/admin/services', {}, adminPassword);
       return data.services as AdminService[];
     },
     enabled: !!adminPassword,
@@ -52,22 +38,14 @@ export function useAdminServices(adminPassword: string) {
 
   const createMutation = useMutation({
     mutationFn: async (service: ServiceFormData) => {
-      const response = await fetch(`${API_URL}/admin/services`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          'Content-Type': 'application/json',
-          'x-admin-password': adminPassword,
+      return airtableApi(
+        '/admin/services',
+        {
+          method: 'POST',
+          body: JSON.stringify(service),
         },
-        body: JSON.stringify(service),
-      });
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        throw new Error(text || `Failed to create service (${response.status})`);
-      }
-
-      return response.json();
+        adminPassword
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-services'] });
@@ -76,22 +54,14 @@ export function useAdminServices(adminPassword: string) {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, ...service }: ServiceFormData & { id: string }) => {
-      const response = await fetch(`${API_URL}/admin/services/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          'Content-Type': 'application/json',
-          'x-admin-password': adminPassword,
+      return airtableApi(
+        `/admin/services/${id}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(service),
         },
-        body: JSON.stringify(service),
-      });
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        throw new Error(text || `Failed to update service (${response.status})`);
-      }
-
-      return response.json();
+        adminPassword
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-services'] });
@@ -100,20 +70,13 @@ export function useAdminServices(adminPassword: string) {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`${API_URL}/admin/services/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          'x-admin-password': adminPassword,
+      return airtableApi(
+        `/admin/services/${id}`,
+        {
+          method: 'DELETE',
         },
-      });
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        throw new Error(text || `Failed to delete service (${response.status})`);
-      }
-
-      return response.json();
+        adminPassword
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-services'] });
@@ -133,3 +96,4 @@ export function useAdminServices(adminPassword: string) {
     refetch: servicesQuery.refetch,
   };
 }
+
