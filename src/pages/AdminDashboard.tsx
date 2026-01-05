@@ -10,7 +10,7 @@ import { ServicesTab } from '@/components/admin/ServicesTab';
 type Tab = 'calendar' | 'services' | 'settings';
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('calendar');
+  const [activeTab, setActiveTab] = useState<Tab>('services');
   const { isAuthenticated, isLoading, logout, getPassword } = useAdminAuth();
   const navigate = useNavigate();
   
