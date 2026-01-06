@@ -68,13 +68,15 @@ export function ServicesTab({ adminPassword }: ServicesTabProps) {
 
   // Set default sortOrder for new row based on existing services
   useEffect(() => {
-    if (services.length > 0 && newRow === null) {
-      const maxSort = Math.max(...services.map(s => s.sortOrder));
-      setNewRow({ ...emptyRow, sortOrder: maxSort + 1 });
-    } else if (services.length === 0 && newRow === null) {
-      setNewRow({ ...emptyRow });
+    const maxSort = services.length > 0 
+      ? Math.max(...services.map(s => s.sortOrder)) 
+      : 0;
+    const nextSortOrder = maxSort + 1;
+    
+    if (newRow === null) {
+      setNewRow({ ...emptyRow, sortOrder: nextSortOrder });
     }
-  }, [services, newRow]);
+  }, [services.length]);
 
   const handleFieldChange = (id: string, field: keyof ServiceFormData, value: string | number | boolean) => {
     const service = services.find(s => s.id === id);
