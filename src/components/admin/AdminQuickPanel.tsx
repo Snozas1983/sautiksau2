@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
-import { LogIn, LogOut, ExternalLink, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { LogIn, LogOut, ExternalLink, X, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -8,16 +8,11 @@ import { airtableApi } from '@/lib/airtable';
 import { ServicesTab } from './ServicesTab';
 
 export function AdminQuickPanel() {
-  const [searchParams] = useSearchParams();
-  const showPanel = searchParams.get('admin') === '1';
-  
   const [password, setPassword] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [adminPassword, setAdminPassword] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [isPanelOpen, setIsPanelOpen] = useState(true);
-
-  if (!showPanel) return null;
+  const [isPanelOpen, setIsPanelOpen] = useState(false);
 
   const handleLogin = async () => {
     if (!password.trim()) {
@@ -59,9 +54,11 @@ export function AdminQuickPanel() {
       <div className="fixed top-4 right-4 z-50">
         <Button
           size="sm"
-          variant="secondary"
+          variant="outline"
+          className="opacity-50 hover:opacity-100 transition-opacity"
           onClick={() => setIsPanelOpen(true)}
         >
+          <Settings className="w-4 h-4 mr-1" />
           Admin
         </Button>
       </div>
@@ -69,7 +66,7 @@ export function AdminQuickPanel() {
   }
 
   return (
-    <div className="bg-card border-b border-border shadow-lg">
+    <div className="fixed top-0 left-0 right-0 z-50 bg-card border-b border-border shadow-lg">
       {/* Header bar */}
       <div className="flex items-center justify-between px-4 py-3 bg-muted/50">
         <div className="flex items-center gap-4">
