@@ -462,7 +462,7 @@ serve(async (req) => {
             body: JSON.stringify({
               records: [{
                 fields: {
-                  'Key': key,
+                  'Name': key,
                   'Value': String(value),
                 }
               }]
