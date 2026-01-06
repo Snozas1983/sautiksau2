@@ -128,6 +128,7 @@ export type Database = {
           is_active: boolean
           name: string
           price: number
+          sort_order: number | null
         }
         Insert: {
           airtable_id?: string | null
@@ -137,6 +138,7 @@ export type Database = {
           is_active?: boolean
           name: string
           price: number
+          sort_order?: number | null
         }
         Update: {
           airtable_id?: string | null
@@ -146,6 +148,7 @@ export type Database = {
           is_active?: boolean
           name?: string
           price?: number
+          sort_order?: number | null
         }
         Relationships: []
       }

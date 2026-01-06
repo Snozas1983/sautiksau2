@@ -88,7 +88,7 @@ serve(async (req) => {
         .from('services')
         .select('*')
         .eq('is_active', true)
-        .order('name');
+        .order('sort_order', { ascending: true });
       
       if (error) {
         console.error('Error fetching services from Supabase:', error);
@@ -540,6 +540,7 @@ serve(async (req) => {
         const duration = record.fields['Duration (minutes)'];
         const price = record.fields['Regular price (EUR)'];
         const isActive = record.fields['Active?'] ?? true;
+        const sortOrder = record.fields['Sort order'] ?? 999;
         
         if (!serviceName || !duration || price === undefined) {
           console.log(`Skipping record ${record.id} - missing required fields`);
@@ -562,6 +563,7 @@ serve(async (req) => {
               duration: duration,
               price: price,
               is_active: isActive,
+              sort_order: sortOrder,
             })
             .eq('airtable_id', record.id);
           
@@ -581,6 +583,7 @@ serve(async (req) => {
               duration: duration,
               price: price,
               is_active: isActive,
+              sort_order: sortOrder,
             });
           
           if (error) {
