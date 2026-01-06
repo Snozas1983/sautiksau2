@@ -108,6 +108,128 @@ serve(async (req) => {
       });
     }
 
+    // GET /availability/calendar - Get calendar availability for a date range
+    if (path === '/availability/calendar' && req.method === 'GET') {
+      const serviceDuration = parseInt(url.searchParams.get('serviceDuration') || '60');
+      const daysAhead = parseInt(url.searchParams.get('daysAhead') || '30');
+      
+      console.log(`Generating calendar availability: duration=${serviceDuration}, daysAhead=${daysAhead}`);
+      
+      // 1. Get settings for work hours
+      const settings = await getSettings();
+      const workStart = settings['M-F Start'] || '09:00';
+      const workEnd = settings['M-F Finish'] || '18:00';
+      const breakBetween = parseInt(settings['break_between'] || '15');
+      
+      // 2. Calculate date range
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      const maxDate = new Date(today);
+      maxDate.setDate(maxDate.getDate() + daysAhead);
+      
+      // 3. Get all bookings in this date range from Airtable
+      const startDateStr = today.toISOString().split('T')[0];
+      const endDateStr = maxDate.toISOString().split('T')[0];
+      
+      const bookingsData = await airtableRequest(
+        `/Bookings?filterByFormula=AND({Date}>='${startDateStr}',{Date}<='${endDateStr}',OR({Status}='pending',{Status}='confirmed'))`
+      );
+      
+      // Group bookings by date
+      const bookingsByDate = new Map<string, Array<{ startTime: string; endTime: string }>>();
+      for (const record of bookingsData.records) {
+        const date = record.fields['Date'];
+        const startTime = record.fields['Start Time'];
+        const endTime = record.fields['End Time'];
+        
+        if (date && startTime && endTime) {
+          if (!bookingsByDate.has(date)) {
+            bookingsByDate.set(date, []);
+          }
+          bookingsByDate.get(date)!.push({ startTime, endTime });
+        }
+      }
+      
+      // 4. Generate slots for each day
+      const availability: Array<{ date: string; slots: Array<{ id: string; startTime: string; endTime: string }> }> = [];
+      
+      // Helper functions
+      function timeToMinutes(time: string): number {
+        const [hours, minutes] = time.split(':').map(Number);
+        return hours * 60 + minutes;
+      }
+      
+      function minutesToTime(minutes: number): string {
+        const hours = Math.floor(minutes / 60);
+        const mins = minutes % 60;
+        return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+      }
+      
+      function isSlotOccupied(
+        slotStart: number, 
+        slotEnd: number, 
+        bookings: Array<{ startTime: string; endTime: string }>
+      ): boolean {
+        for (const booking of bookings) {
+          const bookingStart = timeToMinutes(booking.startTime);
+          const bookingEnd = timeToMinutes(booking.endTime);
+          
+          // Check for overlap (including break time)
+          if (slotStart < bookingEnd + breakBetween && slotEnd > bookingStart) {
+            return true;
+          }
+        }
+        return false;
+      }
+      
+      const workStartMinutes = timeToMinutes(workStart);
+      const workEndMinutes = timeToMinutes(workEnd);
+      
+      for (let i = 1; i <= daysAhead; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() + i);
+        const dateStr = date.toISOString().split('T')[0];
+        const dayOfWeek = date.getDay(); // 0 = Sunday
+        
+        // Skip Sundays
+        if (dayOfWeek === 0) {
+          availability.push({ date: dateStr, slots: [] });
+          continue;
+        }
+        
+        const dayBookings = bookingsByDate.get(dateStr) || [];
+        const slots: Array<{ id: string; startTime: string; endTime: string }> = [];
+        
+        // Generate slots every 30 minutes
+        for (let start = workStartMinutes; start + serviceDuration <= workEndMinutes; start += 30) {
+          const end = start + serviceDuration;
+          
+          // Check if slot is available (not occupied by existing bookings)
+          if (!isSlotOccupied(start, end, dayBookings)) {
+            const startTime = minutesToTime(start);
+            const endTime = minutesToTime(end);
+            slots.push({
+              id: `${dateStr}-${startTime}`,
+              startTime,
+              endTime,
+            });
+          }
+        }
+        
+        availability.push({ date: dateStr, slots });
+      }
+      
+      console.log(`Generated availability for ${availability.length} days`);
+      
+      return new Response(JSON.stringify({ 
+        availability,
+        maxDate: endDateStr,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // GET /settings - Get public settings
     if (path === '/settings' && req.method === 'GET') {
       const settings = await getSettings();

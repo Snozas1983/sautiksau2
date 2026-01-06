@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import { TimeSlot, BookingStep, CustomerFormData } from './types';
-import { generateMockAvailability } from './mockData';
 import { useServices, Service } from '@/hooks/useServices';
+import { useCalendarAvailability } from '@/hooks/useCalendarAvailability';
 
 import { BookingCalendar } from './BookingCalendar';
 import { TimeSlotSelector } from './TimeSlotSelector';
@@ -17,11 +17,13 @@ export const BookingSection = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlot | null>(null);
 
-  // Generate availability based on selected service
-  const availability = useMemo(() => {
-    if (!selectedService) return [];
-    return generateMockAvailability(selectedService.duration);
-  }, [selectedService]);
+  // Get real availability based on selected service
+  const { data: availabilityData, isLoading: isLoadingAvailability } = useCalendarAvailability(
+    selectedService?.duration || null
+  );
+  
+  const availability = availabilityData?.availability || [];
+  const maxDate = availabilityData?.maxDate ? new Date(availabilityData.maxDate) : undefined;
 
   const getAvailableSlotsForDate = (date: Date): TimeSlot[] => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -144,12 +146,17 @@ export const BookingSection = () => {
               <div className="mt-6 animate-fade-in">
                 {/* Calendar */}
                 {step === 'calendar' && (
-                  <BookingCalendar
-                    availability={availability}
-                    selectedDate={selectedDate}
-                    onSelectDate={handleSelectDate}
-                    onBack={handleBackToService}
-                  />
+                  isLoadingAvailability ? (
+                    <div className="text-center py-8 text-booking-muted">Kraunama prieinamumas...</div>
+                  ) : (
+                    <BookingCalendar
+                      availability={availability}
+                      selectedDate={selectedDate}
+                      onSelectDate={handleSelectDate}
+                      onBack={handleBackToService}
+                      maxDate={maxDate}
+                    />
+                  )
                 )}
 
                 {/* Time Slots */}
