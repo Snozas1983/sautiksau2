@@ -317,7 +317,7 @@ export function ServicesTab({ adminPassword }: ServicesTabProps) {
                     <Input
                       type="number"
                       min={0}
-                      step={0.01}
+                      step={1}
                       className="w-16 h-8 text-center text-sm"
                       value={getNumberValue(service, 'price')}
                       onChange={(e) => handleFieldChange(service.id, 'price', parseFloat(e.target.value) || 0)}
@@ -423,7 +423,7 @@ export function ServicesTab({ adminPassword }: ServicesTabProps) {
                   <Input
                     type="number"
                     min={0}
-                    step={0.01}
+                    step={1}
                     className="w-16 h-8 text-center text-sm"
                     value={newRow.price}
                     onChange={(e) => handleNewRowChange('price', parseFloat(e.target.value) || 0)}
