@@ -12,6 +12,7 @@ import {
   addMonths,
   subMonths,
   isBefore,
+  isAfter,
   startOfDay,
   isSunday,
 } from 'date-fns';
@@ -24,6 +25,7 @@ interface BookingCalendarProps {
   selectedDate: Date | null;
   onSelectDate: (date: Date) => void;
   onBack: () => void;
+  maxDate?: Date;
 }
 
 const WEEKDAYS = ['Pr', 'An', 'Tr', 'Kt', 'Pn', 'Št', 'Sk'];
@@ -33,6 +35,7 @@ export const BookingCalendar = ({
   selectedDate,
   onSelectDate,
   onBack,
+  maxDate,
 }: BookingCalendarProps) => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const today = startOfDay(new Date());
@@ -61,6 +64,7 @@ export const BookingCalendar = ({
   }, [currentMonth]);
 
   const canGoPrev = !isBefore(startOfMonth(currentMonth), startOfMonth(today));
+  const canGoNext = !maxDate || !isAfter(startOfMonth(addMonths(currentMonth, 1)), startOfMonth(maxDate));
 
   const getSlotCount = (date: Date): number => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -70,7 +74,12 @@ export const BookingCalendar = ({
   const isDateClickable = (date: Date): boolean => {
     if (isBefore(date, today)) return false;
     if (isSunday(date)) return false;
+    if (maxDate && isAfter(date, maxDate)) return false;
     return getSlotCount(date) > 0;
+  };
+  
+  const isDateBeyondMax = (date: Date): boolean => {
+    return maxDate ? isAfter(date, maxDate) : false;
   };
 
   const todayHasSlots = getSlotCount(today) > 0;
@@ -105,8 +114,14 @@ export const BookingCalendar = ({
             {format(currentMonth, 'LLLL yyyy', { locale: lt })}
           </h4>
           <button
-            onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
-            className="p-1 rounded-sm hover:bg-booking-border text-booking-foreground transition-colors"
+            onClick={() => canGoNext && setCurrentMonth(addMonths(currentMonth, 1))}
+            disabled={!canGoNext}
+            className={cn(
+              'p-1 rounded-sm transition-colors',
+              canGoNext
+                ? 'hover:bg-booking-border text-booking-foreground'
+                : 'text-booking-muted/30 cursor-not-allowed'
+            )}
             aria-label="Kitas mėnuo"
           >
             <ChevronRight size={16} />
@@ -136,6 +151,7 @@ export const BookingCalendar = ({
             const isSelected = selectedDate && isSameDay(date, selectedDate);
             const isPast = isBefore(date, today);
             const isSundayDay = isSunday(date);
+            const isBeyondMax = isDateBeyondMax(date);
             const slotCount = getSlotCount(date);
             const isClickable = isDateClickable(date);
             const hasAvailableSlots = slotCount > 0;
@@ -152,16 +168,16 @@ export const BookingCalendar = ({
                   'aspect-square flex items-center justify-center rounded-sm transition-all duration-200',
                   'min-h-[28px] text-xs',
                   !isCurrentMonth && 'opacity-30',
-                  (isPast || isTodayNoSlots) && 'opacity-30 cursor-not-allowed',
-                  isSundayDay && !isPast && 'opacity-40 cursor-not-allowed',
+                  (isPast || isTodayNoSlots || isBeyondMax) && 'opacity-30 cursor-not-allowed',
+                  isSundayDay && !isPast && !isBeyondMax && 'opacity-40 cursor-not-allowed',
                   isClickable && 'hover:bg-booking-available/10 cursor-pointer',
                   isSelected && 'bg-booking-available/20 ring-1 ring-booking-available',
-                  !isClickable && !isPast && !isSundayDay && isCurrentMonth && !isTodayNoSlots && 'text-booking-muted/60'
+                  !isClickable && !isPast && !isSundayDay && !isBeyondMax && isCurrentMonth && !isTodayNoSlots && 'text-booking-muted/60'
                 )}
               >
                 <span
                   className={cn(
-                    hasAvailableSlots && isCurrentMonth && !isPast && !isSundayDay
+                    hasAvailableSlots && isCurrentMonth && !isPast && !isSundayDay && !isBeyondMax
                       ? 'font-bold text-booking-foreground'
                       : 'font-light text-booking-muted'
                   )}
