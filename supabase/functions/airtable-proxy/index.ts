@@ -722,11 +722,42 @@ serve(async (req) => {
         }
       }
       
-      console.log(`Sync complete: ${synced} services synced, ${errors.length} errors`);
+      // 4. Delete services that no longer exist in Airtable
+      const airtableIds = airtableData.records.map((r: { id: string }) => r.id);
+      console.log(`Airtable has ${airtableIds.length} services, checking for orphaned records...`);
+
+      // Get all services from Supabase that have airtable_id
+      const { data: supabaseServices } = await supabase
+        .from('services')
+        .select('id, airtable_id, name')
+        .not('airtable_id', 'is', null);
+
+      let deleted = 0;
+      if (supabaseServices) {
+        for (const service of supabaseServices) {
+          if (service.airtable_id && !airtableIds.includes(service.airtable_id)) {
+            console.log(`Deleting orphaned service: ${service.name} (${service.airtable_id})`);
+            const { error } = await supabase
+              .from('services')
+              .delete()
+              .eq('id', service.id);
+            
+            if (error) {
+              console.error(`Error deleting service ${service.id}:`, error);
+              errors.push(`Delete ${service.name}: ${error.message}`);
+            } else {
+              deleted++;
+            }
+          }
+        }
+      }
+      
+      console.log(`Sync complete: ${synced} synced, ${deleted} deleted, ${errors.length} errors`);
       
       return new Response(JSON.stringify({ 
         success: errors.length === 0,
         synced,
+        deleted,
         total: airtableData.records.length,
         errors: errors.length > 0 ? errors : undefined,
       }), {
