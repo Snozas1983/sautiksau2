@@ -119,7 +119,7 @@ serve(async (req) => {
       const settings = await getSettings();
       const workStart = settings['M-F Start'] || '09:00';
       const workEnd = settings['M-F Finish'] || '18:00';
-      const breakBetween = parseInt(settings['break_between'] || '15');
+      const breakBetween = 0; // Nėra pertraukų tarp vizitų
       
       // 2. Calculate date range
       const today = new Date();
@@ -133,21 +133,26 @@ serve(async (req) => {
       const endDateStr = maxDate.toISOString().split('T')[0];
       
       const bookingsData = await airtableRequest(
-        `/Bookings?filterByFormula=AND({Date}>='${startDateStr}',{Date}<='${endDateStr}',OR({Status}='pending',{Status}='confirmed'))`
+        `/Bookings?filterByFormula=AND(IS_AFTER({Start date/time},'${startDateStr}'),IS_BEFORE({Start date/time},'${endDateStr} 23:59'),OR({Status}='pending',{Status}='confirmed'))`
       );
       
       // Group bookings by date
       const bookingsByDate = new Map<string, Array<{ startTime: string; endTime: string }>>();
       for (const record of bookingsData.records) {
-        const date = record.fields['Date'];
-        const startTime = record.fields['Start Time'];
-        const endTime = record.fields['End Time'];
+        const startDateTime = record.fields['Start date/time']; // "2025-12-16 10:00"
+        const endDateTime = record.fields['Finish date/time'];
         
-        if (date && startTime && endTime) {
-          if (!bookingsByDate.has(date)) {
-            bookingsByDate.set(date, []);
+        if (startDateTime && endDateTime) {
+          // Išskaidyti datą ir laiką
+          const [date, startTime] = startDateTime.split(' ');
+          const endTime = endDateTime.split(' ')[1];
+          
+          if (date && startTime && endTime) {
+            if (!bookingsByDate.has(date)) {
+              bookingsByDate.set(date, []);
+            }
+            bookingsByDate.get(date)!.push({ startTime, endTime });
           }
-          bookingsByDate.get(date)!.push({ startTime, endTime });
         }
       }
       

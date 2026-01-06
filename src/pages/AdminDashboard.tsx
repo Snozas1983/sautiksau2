@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Settings, LogOut, List } from 'lucide-react';
+import { Calendar, Settings, LogOut, List, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { CalendarTab } from '@/components/admin/CalendarTab';
@@ -43,7 +43,12 @@ const AdminDashboard = () => {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header */}
       <header className="border-b border-border bg-card px-4 py-3 flex items-center justify-between">
-        <h1 className="text-lg font-medium text-foreground">Admin</h1>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => navigate('/')}>
+            <Home className="w-4 h-4" />
+          </Button>
+          <h1 className="text-lg font-medium text-foreground">Admin</h1>
+        </div>
         <Button variant="ghost" size="sm" onClick={handleLogout}>
           <LogOut className="w-4 h-4" />
         </Button>
