@@ -260,23 +260,30 @@ serve(async (req) => {
       
       let filter = '';
       if (date) {
-        filter = `?filterByFormula=AND({Date}='${date}',OR({Status}='pending',{Status}='confirmed'))`;
+        filter = `?filterByFormula=AND(IS_SAME({Start date/time},'${date}','day'),OR({Status}='pending',{Status}='confirmed'))`;
       }
       
       const data = await airtableRequest(`/Bookings${filter}`);
-      const bookings = data.records.map((record: any) => ({
-        id: record.id,
-        serviceId: record.fields['Service']?.[0],
-        date: record.fields['Date'],
-        startTime: record.fields['Start Time'],
-        endTime: record.fields['End Time'],
-        status: record.fields['Status'],
-        customerName: record.fields['Customer Name'],
-        customerPhone: record.fields['Customer Phone'],
-        customerEmail: record.fields['Customer Email'],
-        promoCode: record.fields['Promo Code'],
-        createdAt: record.fields['Created At'],
-      }));
+      const bookings = data.records.map((record: any) => {
+        const startDateTime = record.fields['Start date/time'] || '';
+        const finishDateTime = record.fields['Finish date/time'] || '';
+        const [date, startTime] = startDateTime.split(' ');
+        const endTime = finishDateTime.split(' ')[1] || '';
+        
+        return {
+          id: record.id,
+          serviceId: record.fields['Service']?.[0],
+          date: date || '',
+          startTime: startTime || '',
+          endTime: endTime || '',
+          status: record.fields['Status'],
+          customerName: record.fields['Customer Name'],
+          customerPhone: record.fields['Customer Phone'],
+          customerEmail: record.fields['Customer Email'],
+          promoCode: record.fields['Promo Code'],
+          createdAt: record.fields['Created At'],
+        };
+      });
       
       return new Response(JSON.stringify({ bookings }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -380,34 +387,41 @@ serve(async (req) => {
         filters.push(`{Status}='${status}'`);
       }
       if (dateFrom) {
-        filters.push(`{Date}>='${dateFrom}'`);
+        filters.push(`IS_AFTER({Start date/time},'${dateFrom}')`);
       }
       if (dateTo) {
-        filters.push(`{Date}<='${dateTo}'`);
+        filters.push(`IS_BEFORE({Start date/time},'${dateTo} 23:59')`);
       }
       
       let filterFormula = '';
       if (filters.length > 0) {
-        filterFormula = `?filterByFormula=${encodeURIComponent(filters.length > 1 ? `AND(${filters.join(',')})` : filters[0])}&sort[0][field]=Date&sort[0][direction]=desc`;
+        filterFormula = `?filterByFormula=${encodeURIComponent(filters.length > 1 ? `AND(${filters.join(',')})` : filters[0])}&sort[0][field]=Start date/time&sort[0][direction]=desc`;
       } else {
-        filterFormula = '?sort[0][field]=Date&sort[0][direction]=desc';
+        filterFormula = '?sort[0][field]=Start date/time&sort[0][direction]=desc';
       }
       
       const data = await airtableRequest(`/Bookings${filterFormula}`);
-      const bookings = data.records.map((record: any) => ({
-        id: record.id,
-        serviceId: record.fields['Service']?.[0],
-        serviceName: record.fields['Service Name']?.[0] || 'Paslauga',
-        date: record.fields['Date'],
-        startTime: record.fields['Start Time'],
-        endTime: record.fields['End Time'],
-        status: record.fields['Status'] || 'pending',
-        customerName: record.fields['Customer Name'],
-        customerPhone: record.fields['Customer Phone'],
-        customerEmail: record.fields['Customer Email'],
-        promoCode: record.fields['Promo Code'],
-        createdAt: record.fields['Created At'],
-      }));
+      const bookings = data.records.map((record: any) => {
+        const startDateTime = record.fields['Start date/time'] || '';
+        const finishDateTime = record.fields['Finish date/time'] || '';
+        const [date, startTime] = startDateTime.split(' ');
+        const endTime = finishDateTime.split(' ')[1] || '';
+        
+        return {
+          id: record.id,
+          serviceId: record.fields['Service']?.[0],
+          serviceName: record.fields['Service Name']?.[0] || 'Paslauga',
+          date: date || '',
+          startTime: startTime || '',
+          endTime: endTime || '',
+          status: record.fields['Status'] || 'pending',
+          customerName: record.fields['Customer Name'],
+          customerPhone: record.fields['Customer Phone'],
+          customerEmail: record.fields['Customer Email'],
+          promoCode: record.fields['Promo Code'],
+          createdAt: record.fields['Created At'],
+        };
+      });
       
       return new Response(JSON.stringify({ bookings }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
