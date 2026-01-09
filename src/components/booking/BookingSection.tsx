@@ -5,6 +5,7 @@ import { useServices, Service } from '@/hooks/useServices';
 import { useCalendarAvailability } from '@/hooks/useCalendarAvailability';
 
 import { BookingCalendar } from './BookingCalendar';
+import { TreatwellButton } from './TreatwellButton';
 import { TimeSlotSelector } from './TimeSlotSelector';
 import { BookingForm } from './BookingForm';
 import { cn } from '@/lib/utils';
@@ -149,13 +150,21 @@ export const BookingSection = () => {
                   isLoadingAvailability ? (
                     <div className="text-center py-8 text-booking-muted">Kraunama prieinamumas...</div>
                   ) : (
-                    <BookingCalendar
-                      availability={availability}
-                      selectedDate={selectedDate}
-                      onSelectDate={handleSelectDate}
-                      onBack={handleBackToService}
-                      maxDate={maxDate}
-                    />
+                    <div className="space-y-6">
+                      <BookingCalendar
+                        availability={availability}
+                        selectedDate={selectedDate}
+                        onSelectDate={handleSelectDate}
+                        onBack={handleBackToService}
+                        maxDate={maxDate}
+                      />
+                      
+                      {/* Treatwell mygtukas */}
+                      <div className="pt-4 border-t border-booking-border">
+                        <p className="text-sm text-booking-muted mb-3">Arba registruokitės per:</p>
+                        <TreatwellButton />
+                      </div>
+                    </div>
                   )
                 )}
 
