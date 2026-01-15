@@ -14,6 +14,8 @@ interface AdminMonthCalendarProps {
   onDayClick?: (date: Date) => void;
   onDeleteException?: (exceptionId: string) => void;
   onExceptionClick?: (exception: ScheduleException, date: Date) => void;
+  currentMonth?: Date;
+  onMonthChange?: (month: Date) => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -31,8 +33,19 @@ export function AdminMonthCalendar({
   onDayClick,
   onDeleteException,
   onExceptionClick,
+  currentMonth: externalMonth,
+  onMonthChange,
 }: AdminMonthCalendarProps) {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [internalMonth, setInternalMonth] = useState(new Date());
+  const currentMonth = externalMonth ?? internalMonth;
+  
+  const handleMonthChange = (newMonth: Date) => {
+    if (onMonthChange) {
+      onMonthChange(newMonth);
+    } else {
+      setInternalMonth(newMonth);
+    }
+  };
 
   const calendarDays = useMemo(() => {
     const monthStart = startOfMonth(currentMonth);
@@ -98,7 +111,7 @@ export function AdminMonthCalendar({
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
+          onClick={() => handleMonthChange(subMonths(currentMonth, 1))}
         >
           <ChevronLeft className="h-5 w-5" />
         </Button>
@@ -108,7 +121,7 @@ export function AdminMonthCalendar({
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+          onClick={() => handleMonthChange(addMonths(currentMonth, 1))}
         >
           <ChevronRight className="h-5 w-5" />
         </Button>
@@ -133,7 +146,7 @@ export function AdminMonthCalendar({
           const dayExceptions = getExceptionsForDate(day);
           const isCurrentMonth = isSameMonth(day, currentMonth);
           const isToday = isSameDay(day, new Date());
-          const maxVisible = 2;
+          const maxVisible = 3;
           const visibleBookings = dayBookings.slice(0, maxVisible);
           const hiddenCount = dayBookings.length - maxVisible;
 

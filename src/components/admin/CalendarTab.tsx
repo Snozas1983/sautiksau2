@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { useAdminBookings, useUpdateBookingStatus, useAddToBlacklist, useRescheduleBooking, Booking } from '@/hooks/useBookings';
 import { useScheduleExceptions, useDeleteException, ScheduleException } from '@/hooks/useScheduleExceptions';
 import { AdminMonthCalendar } from './AdminMonthCalendar';
+import { AdminDayView } from './AdminDayView';
 import { BookingDetailDialog } from './BookingDetailDialog';
 import { RescheduleDialog } from './RescheduleDialog';
 import { BlacklistConfirmDialog } from './BlacklistConfirmDialog';
@@ -22,16 +23,19 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
   const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
   const [blacklistBooking, setBlacklistBooking] = useState<Booking | null>(null);
-  const [exceptionDate, setExceptionDate] = useState<Date | null>(null);
   const [selectedExceptionData, setSelectedExceptionData] = useState<{
     exception: ScheduleException | null;
     date: Date | null;
   }>({ exception: null, date: null });
   
-  // Get bookings for current month and adjacent months
-  const now = new Date();
-  const dateFrom = format(startOfMonth(now), 'yyyy-MM-dd');
-  const dateTo = format(endOfMonth(now), 'yyyy-MM-dd');
+  // Day view state
+  const [viewMode, setViewMode] = useState<'month' | 'day'>('month');
+  const [selectedDayDate, setSelectedDayDate] = useState<Date | null>(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  
+  // Get bookings for current month and adjacent months (include prev/next month for buffer)
+  const dateFrom = format(startOfMonth(subMonths(currentMonth, 1)), 'yyyy-MM-dd');
+  const dateTo = format(endOfMonth(addMonths(currentMonth, 1)), 'yyyy-MM-dd');
   
   const { data: bookings, isLoading } = useAdminBookings(adminPassword, {
     status: statusFilter,
@@ -51,7 +55,25 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
   };
   
   const handleDayClick = (date: Date) => {
-    setSelectedExceptionData({ exception: null, date });
+    setSelectedDayDate(date);
+    setViewMode('day');
+  };
+  
+  const handleBackToMonth = () => {
+    setViewMode('month');
+    setSelectedDayDate(null);
+  };
+  
+  const handleAddExceptionFromDay = () => {
+    if (selectedDayDate) {
+      setSelectedExceptionData({ exception: null, date: selectedDayDate });
+    }
+  };
+  
+  const handleExceptionClickFromDay = (exception: ScheduleException) => {
+    if (selectedDayDate) {
+      setSelectedExceptionData({ exception, date: selectedDayDate });
+    }
   };
   
   const handleExceptionClick = (exception: ScheduleException, date: Date) => {
@@ -191,21 +213,28 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
     }
   };
   
+  // Filter bookings for selected day
+  const dayBookings = selectedDayDate 
+    ? (bookings || []).filter(b => b.date === format(selectedDayDate, 'yyyy-MM-dd'))
+    : [];
+
   return (
     <div className="p-4 space-y-4">
-      <BookingFilters
-        filter="month"
-        statusFilter={statusFilter}
-        onFilterChange={() => {}}
-        onStatusFilterChange={setStatusFilter}
-        hideTimeFilter
-      />
+      {viewMode === 'month' && (
+        <BookingFilters
+          filter="month"
+          statusFilter={statusFilter}
+          onFilterChange={() => {}}
+          onStatusFilterChange={setStatusFilter}
+          hideTimeFilter
+        />
+      )}
       
       {isLoading ? (
         <div className="text-center py-8 text-muted-foreground">
           Kraunama...
         </div>
-      ) : (
+      ) : viewMode === 'month' ? (
         <AdminMonthCalendar
           bookings={bookings || []}
           exceptions={exceptions || []}
@@ -213,8 +242,21 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
           onDayClick={handleDayClick}
           onDeleteException={handleDeleteException}
           onExceptionClick={handleExceptionClick}
+          currentMonth={currentMonth}
+          onMonthChange={setCurrentMonth}
         />
-      )}
+      ) : selectedDayDate ? (
+        <AdminDayView
+          date={selectedDayDate}
+          bookings={dayBookings}
+          exceptions={exceptions || []}
+          onBack={handleBackToMonth}
+          onBookingClick={handleBookingClick}
+          onAddException={handleAddExceptionFromDay}
+          onExceptionClick={handleExceptionClickFromDay}
+          onDeleteException={handleDeleteException}
+        />
+      ) : null}
       
       {/* Booking detail dialog */}
       <BookingDetailDialog
