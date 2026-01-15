@@ -329,18 +329,21 @@ serve(async (req) => {
         console.log('Service lookup success:', { uuid: body.serviceId, airtableId: serviceAirtableId, name: serviceName });
       }
       
+      // Combine date and time into Airtable's expected format: "YYYY-MM-DD HH:MM"
+      const startDateTime = `${body.date} ${body.startTime}`;
+      const endDateTime = `${body.date} ${body.endTime}`;
+      
       const data = await airtableRequest('/Bookings', {
         method: 'POST',
         body: JSON.stringify({
           records: [{
             fields: {
               'Service': [serviceAirtableId],
-              'Date': body.date,
-              'Start Time': body.startTime,
-              'End Time': body.endTime,
+              'Start date/time': startDateTime,
+              'Finish date/time': endDateTime,
               'Customer Name': body.customerName,
               'Customer Phone': body.customerPhone,
-              'Customer Email': body.customerEmail,
+              'Customer Email': body.customerEmail || '',
               'Status': 'pending',
               'Promo Code': body.promoCode || '',
             }
