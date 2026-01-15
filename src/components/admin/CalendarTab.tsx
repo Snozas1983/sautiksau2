@@ -1,55 +1,52 @@
 import { useState } from 'react';
-import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
-import { lt } from 'date-fns/locale';
-import { useAdminBookings, useUpdateBookingStatus, useAddToBlacklist, Booking } from '@/hooks/useBookings';
-import { BookingCard } from './BookingCard';
-import { BookingFilters, FilterType } from './BookingFilters';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { useAdminBookings, useUpdateBookingStatus, useAddToBlacklist, useRescheduleBooking, Booking } from '@/hooks/useBookings';
+import { AdminMonthCalendar } from './AdminMonthCalendar';
+import { BookingDetailDialog } from './BookingDetailDialog';
+import { RescheduleDialog } from './RescheduleDialog';
 import { BlacklistConfirmDialog } from './BlacklistConfirmDialog';
+import { BookingFilters, FilterType } from './BookingFilters';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface CalendarTabProps {
   adminPassword: string;
 }
 
 export function CalendarTab({ adminPassword }: CalendarTabProps) {
-  const [filter, setFilter] = useState<FilterType>('today');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
+  const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
   const [blacklistBooking, setBlacklistBooking] = useState<Booking | null>(null);
   
-  // Calculate date range based on filter
-  const getDateRange = () => {
-    const now = new Date();
-    
-    switch (filter) {
-      case 'today':
-        return {
-          dateFrom: format(startOfDay(now), 'yyyy-MM-dd'),
-          dateTo: format(endOfDay(now), 'yyyy-MM-dd'),
-        };
-      case 'week':
-        return {
-          dateFrom: format(startOfWeek(now, { locale: lt }), 'yyyy-MM-dd'),
-          dateTo: format(endOfWeek(now, { locale: lt }), 'yyyy-MM-dd'),
-        };
-      case 'month':
-        return {
-          dateFrom: format(startOfMonth(now), 'yyyy-MM-dd'),
-          dateTo: format(endOfMonth(now), 'yyyy-MM-dd'),
-        };
-      default:
-        return {};
-    }
-  };
+  // Get bookings for current month and adjacent months
+  const now = new Date();
+  const dateFrom = format(startOfMonth(now), 'yyyy-MM-dd');
+  const dateTo = format(endOfMonth(now), 'yyyy-MM-dd');
   
-  const dateRange = getDateRange();
-  
-  const { data: bookings, isLoading, refetch } = useAdminBookings(adminPassword, {
+  const { data: bookings, isLoading } = useAdminBookings(adminPassword, {
     status: statusFilter,
-    ...dateRange,
+    dateFrom,
+    dateTo,
   });
   
   const updateStatus = useUpdateBookingStatus();
   const addToBlacklist = useAddToBlacklist();
+  const reschedule = useRescheduleBooking();
+  
+  const handleBookingClick = (booking: Booking) => {
+    setSelectedBooking(booking);
+  };
   
   const handleStatusChange = async (booking: Booking, newStatus: string) => {
     try {
@@ -60,6 +57,7 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
       });
       
       toast.success('Statusas atnaujintas');
+      setSelectedBooking(null);
       
       // If marked as no_show, ask about blacklist
       if (newStatus === 'no_show') {
@@ -67,6 +65,50 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
       }
     } catch {
       toast.error('Klaida atnaujinant statusą');
+    }
+  };
+  
+  const handleRescheduleClick = (booking: Booking) => {
+    setSelectedBooking(null);
+    setRescheduleBooking(booking);
+  };
+  
+  const handleRescheduleConfirm = async (bookingId: string, date: string, startTime: string, endTime: string) => {
+    try {
+      await reschedule.mutateAsync({
+        bookingId,
+        date,
+        startTime,
+        endTime,
+        adminPassword,
+      });
+      
+      toast.success('Vizitas perkeltas');
+      setRescheduleBooking(null);
+    } catch {
+      toast.error('Klaida perkeliant vizitą');
+    }
+  };
+  
+  const handleCancelClick = (booking: Booking) => {
+    setSelectedBooking(null);
+    setCancelBooking(booking);
+  };
+  
+  const handleCancelConfirm = async () => {
+    if (!cancelBooking) return;
+    
+    try {
+      await updateStatus.mutateAsync({
+        bookingId: cancelBooking.id,
+        status: 'cancelled',
+        adminPassword,
+      });
+      
+      toast.success('Vizitas atšauktas');
+      setCancelBooking(null);
+    } catch {
+      toast.error('Klaida atšaukiant vizitą');
     }
   };
   
@@ -91,32 +133,62 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
   return (
     <div className="p-4 space-y-4">
       <BookingFilters
-        filter={filter}
+        filter="month"
         statusFilter={statusFilter}
-        onFilterChange={setFilter}
+        onFilterChange={() => {}}
         onStatusFilterChange={setStatusFilter}
+        hideTimeFilter
       />
       
       {isLoading ? (
         <div className="text-center py-8 text-muted-foreground">
           Kraunama...
         </div>
-      ) : bookings && bookings.length > 0 ? (
-        <div className="space-y-3">
-          {bookings.map((booking) => (
-            <BookingCard
-              key={booking.id}
-              booking={booking}
-              onStatusChange={handleStatusChange}
-            />
-          ))}
-        </div>
       ) : (
-        <div className="text-center py-8 text-muted-foreground">
-          Nėra rezervacijų
-        </div>
+        <AdminMonthCalendar
+          bookings={bookings || []}
+          onBookingClick={handleBookingClick}
+        />
       )}
       
+      {/* Booking detail dialog */}
+      <BookingDetailDialog
+        booking={selectedBooking}
+        open={!!selectedBooking}
+        onClose={() => setSelectedBooking(null)}
+        onStatusChange={handleStatusChange}
+        onReschedule={handleRescheduleClick}
+        onCancel={handleCancelClick}
+      />
+      
+      {/* Reschedule dialog */}
+      <RescheduleDialog
+        booking={rescheduleBooking}
+        open={!!rescheduleBooking}
+        onClose={() => setRescheduleBooking(null)}
+        onConfirm={handleRescheduleConfirm}
+        isLoading={reschedule.isPending}
+      />
+      
+      {/* Cancel confirmation dialog */}
+      <AlertDialog open={!!cancelBooking} onOpenChange={() => setCancelBooking(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Atšaukti vizitą?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ar tikrai norite atšaukti {cancelBooking?.customerName} vizitą {cancelBooking?.date} {cancelBooking?.startTime}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Ne</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCancelConfirm}>
+              Taip, atšaukti
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Blacklist dialog */}
       <BlacklistConfirmDialog
         open={!!blacklistBooking}
         onClose={() => setBlacklistBooking(null)}

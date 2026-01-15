@@ -144,3 +144,33 @@ export function useAddToBlacklist() {
     },
   });
 }
+
+// Admin: Reschedule booking
+export function useRescheduleBooking() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ 
+      bookingId, 
+      date,
+      startTime,
+      endTime,
+      adminPassword 
+    }: { 
+      bookingId: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      adminPassword: string;
+    }) => {
+      await airtableApi(`/admin/bookings/${bookingId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ date, startTime, endTime }),
+      }, adminPassword);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['availability'] });
+    },
+  });
+}
