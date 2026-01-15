@@ -470,14 +470,30 @@ serve(async (req) => {
       });
     }
 
-    // PUT /admin/bookings/:id - Update booking status
+    // PUT /admin/bookings/:id - Update booking (status and/or reschedule)
     if (path.startsWith('/admin/bookings/') && req.method === 'PUT') {
       const bookingId = path.split('/').pop();
       const body = await req.json();
       
+      // Build update object
+      const updateData: Record<string, any> = {};
+      
+      if (body.status) {
+        updateData.status = body.status;
+      }
+      if (body.date) {
+        updateData.date = body.date;
+      }
+      if (body.startTime) {
+        updateData.start_time = body.startTime;
+      }
+      if (body.endTime) {
+        updateData.end_time = body.endTime;
+      }
+      
       const { error } = await supabaseAdmin
         .from('bookings')
-        .update({ status: body.status })
+        .update(updateData)
         .eq('id', bookingId);
       
       if (error) {

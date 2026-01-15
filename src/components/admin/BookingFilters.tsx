@@ -8,17 +8,20 @@ interface BookingFiltersProps {
   statusFilter: string;
   onFilterChange: (filter: FilterType) => void;
   onStatusFilterChange: (status: string) => void;
+  hideTimeFilter?: boolean;
 }
 
 export function BookingFilters({ 
   filter, 
   statusFilter, 
   onFilterChange, 
-  onStatusFilterChange 
+  onStatusFilterChange,
+  hideTimeFilter = false,
 }: BookingFiltersProps) {
   return (
     <div className="space-y-3">
       {/* Date filter buttons */}
+      {!hideTimeFilter && (
       <div className="flex gap-2 overflow-x-auto pb-2">
         <Button
           variant={filter === 'today' ? 'secondary' : 'outline'}
@@ -49,6 +52,7 @@ export function BookingFilters({
           Visi
         </Button>
       </div>
+      )}
       
       {/* Status filter */}
       <Select value={statusFilter} onValueChange={onStatusFilterChange}>
