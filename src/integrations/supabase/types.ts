@@ -47,10 +47,13 @@ export type Database = {
           customer_email: string | null
           customer_name: string
           customer_phone: string
+          date: string | null
+          end_time: string | null
           id: string
           promo_code: string | null
           service_id: string
-          slot_id: string
+          slot_id: string | null
+          start_time: string | null
           status: string
         }
         Insert: {
@@ -58,10 +61,13 @@ export type Database = {
           customer_email?: string | null
           customer_name: string
           customer_phone: string
+          date?: string | null
+          end_time?: string | null
           id?: string
           promo_code?: string | null
           service_id: string
-          slot_id: string
+          slot_id?: string | null
+          start_time?: string | null
           status?: string
         }
         Update: {
@@ -69,10 +75,13 @@ export type Database = {
           customer_email?: string | null
           customer_name?: string
           customer_phone?: string
+          date?: string | null
+          end_time?: string | null
           id?: string
           promo_code?: string | null
           service_id?: string
-          slot_id?: string
+          slot_id?: string | null
+          start_time?: string | null
           status?: string
         }
         Relationships: [
@@ -91,6 +100,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      clients: {
+        Row: {
+          blacklist_reason: string | null
+          created_at: string
+          id: string
+          is_blacklisted: boolean
+          name: string | null
+          no_show_count: number
+          phone: string
+          updated_at: string
+        }
+        Insert: {
+          blacklist_reason?: string | null
+          created_at?: string
+          id?: string
+          is_blacklisted?: boolean
+          name?: string | null
+          no_show_count?: number
+          phone: string
+          updated_at?: string
+        }
+        Update: {
+          blacklist_reason?: string | null
+          created_at?: string
+          id?: string
+          is_blacklisted?: boolean
+          name?: string | null
+          no_show_count?: number
+          phone?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       promo_codes: {
         Row: {
@@ -121,34 +163,61 @@ export type Database = {
       }
       services: {
         Row: {
-          airtable_id: string | null
           created_at: string
+          description: string | null
           duration: number
           id: string
           is_active: boolean
           name: string
+          preparation_time: number | null
           price: number
           sort_order: number | null
         }
         Insert: {
-          airtable_id?: string | null
           created_at?: string
+          description?: string | null
           duration: number
           id?: string
           is_active?: boolean
           name: string
+          preparation_time?: number | null
           price: number
           sort_order?: number | null
         }
         Update: {
-          airtable_id?: string | null
           created_at?: string
+          description?: string | null
           duration?: number
           id?: string
           is_active?: boolean
           name?: string
+          preparation_time?: number | null
           price?: number
           sort_order?: number | null
+        }
+        Relationships: []
+      }
+      settings: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: string
         }
         Relationships: []
       }

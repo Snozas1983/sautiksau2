@@ -17,7 +17,6 @@ export interface ServiceFormData {
   name: string;
   duration: number;
   preparationTime: number;
-  // bookingTime is a formula field in Airtable (Duration + Preparation) - read-only
   price: number;
   isActive: boolean;
   description: string;
@@ -26,14 +25,6 @@ export interface ServiceFormData {
 
 export function useAdminServices(adminPassword: string) {
   const queryClient = useQueryClient();
-
-  const syncToSupabase = async () => {
-    try {
-      await airtableApi('/admin/sync-services', { method: 'POST' }, adminPassword);
-    } catch (error) {
-      console.error('Auto-sync failed:', error);
-    }
-  };
 
   const servicesQuery = useQuery({
     queryKey: ['admin-services', adminPassword],
@@ -55,9 +46,9 @@ export function useAdminServices(adminPassword: string) {
         adminPassword
       );
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-services'] });
-      await syncToSupabase();
+      queryClient.invalidateQueries({ queryKey: ['services'] });
     },
   });
 
@@ -72,9 +63,9 @@ export function useAdminServices(adminPassword: string) {
         adminPassword
       );
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-services'] });
-      await syncToSupabase();
+      queryClient.invalidateQueries({ queryKey: ['services'] });
     },
   });
 
@@ -88,9 +79,9 @@ export function useAdminServices(adminPassword: string) {
         adminPassword
       );
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-services'] });
-      await syncToSupabase();
+      queryClient.invalidateQueries({ queryKey: ['services'] });
     },
   });
 
@@ -107,4 +98,3 @@ export function useAdminServices(adminPassword: string) {
     refetch: servicesQuery.refetch,
   };
 }
-

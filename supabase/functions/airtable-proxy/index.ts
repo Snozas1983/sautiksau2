@@ -2,10 +2,6 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const AIRTABLE_API_TOKEN = Deno.env.get('AIRTABLE_API_TOKEN');
-const AIRTABLE_BASE_ID = 'app0sAtFcDVOIJgIJ';
-const AIRTABLE_API_URL = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}`;
-
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -19,37 +15,20 @@ const corsHeaders = {
   'Access-Control-Max-Age': '86400',
 };
 
-// Helper to make Airtable requests
-async function airtableRequest(endpoint: string, options: RequestInit = {}) {
-  const response = await fetch(`${AIRTABLE_API_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      'Authorization': `Bearer ${AIRTABLE_API_TOKEN}`,
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+// Get settings from Supabase
+async function getSettings(): Promise<Record<string, string>> {
+  const { data, error } = await supabaseAdmin
+    .from('settings')
+    .select('key, value');
   
-  if (!response.ok) {
-    const error = await response.text();
-    console.error('Airtable error:', { endpoint, status: response.status, error });
-    throw new Error(`Airtable error ${response.status}: ${error}`);
+  if (error) {
+    console.error('Error fetching settings:', error);
+    throw error;
   }
   
-  return response.json();
-}
-
-// Get settings from key-value Settings table
-async function getSettings() {
-  const data = await airtableRequest('/Settings');
   const settings: Record<string, string> = {};
-  
-  for (const record of data.records) {
-    const key = record.fields['Key'] || record.fields['Name'];
-    const value = record.fields['Value'];
-    if (key && value !== undefined) {
-      settings[key] = value;
-    }
+  for (const row of data || []) {
+    settings[row.key] = row.value;
   }
   
   return settings;
@@ -65,6 +44,18 @@ function decodeBase64Utf8(value: string): string {
   const bin = atob(value);
   const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
   return new TextDecoder().decode(bytes);
+}
+
+// Helper functions for time calculations
+function timeToMinutes(time: string): number {
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+function minutesToTime(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
 }
 
 serve(async (req) => {
@@ -83,7 +74,6 @@ serve(async (req) => {
 
     // GET /services - Get active services
     if (path === '/services' && req.method === 'GET') {
-      // Fetch from Supabase instead of Airtable (synced data)
       const { data, error } = await supabaseAdmin
         .from('services')
         .select('*')
@@ -91,7 +81,7 @@ serve(async (req) => {
         .order('sort_order', { ascending: true });
       
       if (error) {
-        console.error('Error fetching services from Supabase:', error);
+        console.error('Error fetching services:', error);
         throw error;
       }
       
@@ -117,9 +107,9 @@ serve(async (req) => {
       
       // 1. Get settings for work hours
       const settings = await getSettings();
-      const workStart = settings['M-F Start'] || '09:00';
-      const workEnd = settings['M-F Finish'] || '18:00';
-      const breakBetween = 0; // Nėra pertraukų tarp vizitų
+      const workStart = settings['work_start'] || '09:00';
+      const workEnd = settings['work_end'] || '18:00';
+      const breakBetween = parseInt(settings['break_between'] || '0');
       
       // 2. Calculate date range
       const today = new Date();
@@ -128,48 +118,39 @@ serve(async (req) => {
       const maxDate = new Date(today);
       maxDate.setDate(maxDate.getDate() + daysAhead);
       
-      // 3. Get all bookings in this date range from Airtable
+      // 3. Get all bookings in this date range from Supabase
       const startDateStr = today.toISOString().split('T')[0];
       const endDateStr = maxDate.toISOString().split('T')[0];
       
-      const bookingsData = await airtableRequest(
-        `/Bookings?filterByFormula=AND(IS_AFTER({Start date/time},'${startDateStr}'),IS_BEFORE({Start date/time},'${endDateStr} 23:59'),OR({Status}='pending',{Status}='confirmed'))`
-      );
+      const { data: bookingsData, error: bookingsError } = await supabaseAdmin
+        .from('bookings')
+        .select('date, start_time, end_time')
+        .gte('date', startDateStr)
+        .lte('date', endDateStr)
+        .in('status', ['pending', 'confirmed']);
+      
+      if (bookingsError) {
+        console.error('Error fetching bookings:', bookingsError);
+        throw bookingsError;
+      }
       
       // Group bookings by date
       const bookingsByDate = new Map<string, Array<{ startTime: string; endTime: string }>>();
-      for (const record of bookingsData.records) {
-        const startDateTime = record.fields['Start date/time']; // "2025-12-16 10:00"
-        const endDateTime = record.fields['Finish date/time'];
+      for (const booking of bookingsData || []) {
+        const date = booking.date;
+        const startTime = booking.start_time?.substring(0, 5); // "HH:MM:SS" -> "HH:MM"
+        const endTime = booking.end_time?.substring(0, 5);
         
-        if (startDateTime && endDateTime) {
-          // Išskaidyti datą ir laiką
-          const [date, startTime] = startDateTime.split(' ');
-          const endTime = endDateTime.split(' ')[1];
-          
-          if (date && startTime && endTime) {
-            if (!bookingsByDate.has(date)) {
-              bookingsByDate.set(date, []);
-            }
-            bookingsByDate.get(date)!.push({ startTime, endTime });
+        if (date && startTime && endTime) {
+          if (!bookingsByDate.has(date)) {
+            bookingsByDate.set(date, []);
           }
+          bookingsByDate.get(date)!.push({ startTime, endTime });
         }
       }
       
       // 4. Generate slots for each day
       const availability: Array<{ date: string; slots: Array<{ id: string; startTime: string; endTime: string }> }> = [];
-      
-      // Helper functions
-      function timeToMinutes(time: string): number {
-        const [hours, minutes] = time.split(':').map(Number);
-        return hours * 60 + minutes;
-      }
-      
-      function minutesToTime(minutes: number): string {
-        const hours = Math.floor(minutes / 60);
-        const mins = minutes % 60;
-        return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-      }
       
       function isSlotOccupied(
         slotStart: number, 
@@ -239,14 +220,13 @@ serve(async (req) => {
     if (path === '/settings' && req.method === 'GET') {
       const settings = await getSettings();
       
-      // Return only public settings (not admin_password)
       const publicSettings = {
-        workStart: settings['M-F Start'] || '09:00',
-        workEnd: settings['M-F Finish'] || '18:00',
-        breakBetween: parseInt(settings['break_between'] || '15'),
+        workStart: settings['work_start'] || '09:00',
+        workEnd: settings['work_end'] || '18:00',
+        breakBetween: parseInt(settings['break_between'] || '0'),
         bookingDaysAhead: parseInt(settings['booking_days_ahead'] || '60'),
         depositAmount: parseFloat(settings['deposit_amount'] || '10'),
-        cancelHoursBefore: parseInt(settings['cancel_hours_before'] || settings['Canselation time'] || '24'),
+        cancelHoursBefore: parseInt(settings['cancel_hours_before'] || '24'),
       };
       
       return new Response(JSON.stringify({ settings: publicSettings }), {
@@ -258,32 +238,36 @@ serve(async (req) => {
     if (path === '/bookings' && req.method === 'GET') {
       const date = url.searchParams.get('date');
       
-      let filter = '';
+      let query = supabaseAdmin
+        .from('bookings')
+        .select('*, services(name)')
+        .in('status', ['pending', 'confirmed']);
+      
       if (date) {
-        filter = `?filterByFormula=AND(IS_SAME({Start date/time},'${date}','day'),OR({Status}='pending',{Status}='confirmed'))`;
+        query = query.eq('date', date);
       }
       
-      const data = await airtableRequest(`/Bookings${filter}`);
-      const bookings = data.records.map((record: any) => {
-        const startDateTime = record.fields['Start date/time'] || '';
-        const finishDateTime = record.fields['Finish date/time'] || '';
-        const [date, startTime] = startDateTime.split(' ');
-        const endTime = finishDateTime.split(' ')[1] || '';
-        
-        return {
-          id: record.id,
-          serviceId: record.fields['Service']?.[0],
-          date: date || '',
-          startTime: startTime || '',
-          endTime: endTime || '',
-          status: record.fields['Status'],
-          customerName: record.fields['Customer Name'],
-          customerPhone: record.fields['Customer Phone'],
-          customerEmail: record.fields['Customer Email'],
-          promoCode: record.fields['Promo Code'],
-          createdAt: record.fields['Created At'],
-        };
-      });
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Error fetching bookings:', error);
+        throw error;
+      }
+      
+      const bookings = (data || []).map((record: any) => ({
+        id: record.id,
+        serviceId: record.service_id,
+        serviceName: record.services?.name || 'Paslauga',
+        date: record.date,
+        startTime: record.start_time?.substring(0, 5),
+        endTime: record.end_time?.substring(0, 5),
+        status: record.status,
+        customerName: record.customer_name,
+        customerPhone: record.customer_phone,
+        customerEmail: record.customer_email,
+        promoCode: record.promo_code,
+        createdAt: record.created_at,
+      }));
       
       return new Response(JSON.stringify({ bookings }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -301,59 +285,54 @@ serve(async (req) => {
         customerName: body.customerName,
       });
       
-      // Look up service to get airtable_id (frontend sends UUID)
-      let serviceAirtableId = body.serviceId;
-      let serviceName = 'Masažas';
+      // Get service details
+      const { data: service, error: serviceError } = await supabaseAdmin
+        .from('services')
+        .select('id, name, duration')
+        .eq('id', body.serviceId)
+        .single();
       
-      // Check if serviceId is a UUID (not starting with 'rec')
-      if (!body.serviceId.startsWith('rec')) {
-        const { data: service, error: serviceError } = await supabaseAdmin
-          .from('services')
-          .select('airtable_id, name')
-          .eq('id', body.serviceId)
-          .single();
-        
-        if (serviceError || !service?.airtable_id) {
-          console.error('Service lookup failed:', serviceError, 'serviceId:', body.serviceId);
-          return new Response(JSON.stringify({ 
-            success: false, 
-            error: 'Invalid serviceId - service not found' 
-          }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        
-        serviceAirtableId = service.airtable_id;
-        serviceName = service.name;
-        console.log('Service lookup success:', { uuid: body.serviceId, airtableId: serviceAirtableId, name: serviceName });
+      if (serviceError || !service) {
+        console.error('Service lookup failed:', serviceError);
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: 'Invalid serviceId - service not found' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
       
-      // Combine date and time into Airtable's expected format: "YYYY-MM-DD HH:MM"
-      const startDateTime = `${body.date} ${body.startTime}`;
-      // Note: 'Finish date/time' is a computed field in Airtable (calculated from start + service duration)
+      // Calculate end time
+      const startMinutes = timeToMinutes(body.startTime);
+      const endMinutes = startMinutes + service.duration;
+      const endTime = minutesToTime(endMinutes);
       
-      const data = await airtableRequest('/Bookings', {
-        method: 'POST',
-        body: JSON.stringify({
-          records: [{
-            fields: {
-              'Service': [serviceAirtableId],
-              'Start date/time': startDateTime,
-              'Customer Name': body.customerName,
-              'Customer Phone': body.customerPhone,
-              'Customer Email': body.customerEmail || '',
-              'Status': 'pending',
-              'Promo Code': body.promoCode || '',
-            }
-          }]
-        }),
-      });
+      // Insert booking into Supabase
+      const { data: newBooking, error: insertError } = await supabaseAdmin
+        .from('bookings')
+        .insert({
+          service_id: body.serviceId,
+          date: body.date,
+          start_time: body.startTime,
+          end_time: endTime,
+          customer_name: body.customerName,
+          customer_phone: body.customerPhone,
+          customer_email: body.customerEmail || null,
+          promo_code: body.promoCode || null,
+          status: 'pending',
+        })
+        .select()
+        .single();
       
-      console.log('Airtable booking created:', data.records[0]?.id);
+      if (insertError) {
+        console.error('Error creating booking:', insertError);
+        throw insertError;
+      }
+      
+      console.log('Booking created:', newBooking.id);
 
-      // Send notifications asynchronously (don't wait for response)
-      // Use the already-defined SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY from top of file
+      // Send notifications asynchronously
       fetch(`${SUPABASE_URL}/functions/v1/send-notifications`, {
         method: 'POST',
         headers: {
@@ -361,11 +340,11 @@ serve(async (req) => {
           'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
         },
         body: JSON.stringify({
-          bookingId: data.records[0].id,
-          serviceName: serviceName,
+          bookingId: newBooking.id,
+          serviceName: service.name,
           date: body.date,
           startTime: body.startTime,
-          endTime: body.endTime,
+          endTime: endTime,
           customerName: body.customerName,
           customerPhone: body.customerPhone,
           customerEmail: body.customerEmail,
@@ -374,7 +353,7 @@ serve(async (req) => {
         .then(res => console.log('send-notifications response status:', res.status))
         .catch(err => console.error('Failed to send notifications:', err));
       
-      return new Response(JSON.stringify({ success: true, booking: data.records[0] }), {
+      return new Response(JSON.stringify({ success: true, booking: newBooking }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -390,16 +369,22 @@ serve(async (req) => {
         });
       }
       
-      const data = await airtableRequest(`/Clients?filterByFormula={Phone}='${phone}'`);
+      const { data, error } = await supabaseAdmin
+        .from('clients')
+        .select('is_blacklisted, no_show_count')
+        .eq('phone', phone)
+        .single();
       
-      if (data.records.length > 0) {
-        const client = data.records[0];
-        const isBlacklisted = client.fields['Is Blacklisted'] === true;
-        
+      if (error && error.code !== 'PGRST116') { // PGRST116 = not found
+        console.error('Error checking client:', error);
+        throw error;
+      }
+      
+      if (data) {
         return new Response(JSON.stringify({ 
           found: true,
-          isBlacklisted,
-          noShowCount: client.fields['No Show Count'] || 0,
+          isBlacklisted: data.is_blacklisted,
+          noShowCount: data.no_show_count,
         }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -442,47 +427,43 @@ serve(async (req) => {
       const dateFrom = url.searchParams.get('dateFrom');
       const dateTo = url.searchParams.get('dateTo');
       
-      let filters: string[] = [];
+      let query = supabaseAdmin
+        .from('bookings')
+        .select('*, services(name)')
+        .order('date', { ascending: false })
+        .order('start_time', { ascending: false });
       
       if (status && status !== 'all') {
-        filters.push(`{Status}='${status}'`);
+        query = query.eq('status', status);
       }
       if (dateFrom) {
-        filters.push(`IS_AFTER({Start date/time},'${dateFrom}')`);
+        query = query.gte('date', dateFrom);
       }
       if (dateTo) {
-        filters.push(`IS_BEFORE({Start date/time},'${dateTo} 23:59')`);
+        query = query.lte('date', dateTo);
       }
       
-      let filterFormula = '';
-      if (filters.length > 0) {
-        filterFormula = `?filterByFormula=${encodeURIComponent(filters.length > 1 ? `AND(${filters.join(',')})` : filters[0])}&sort[0][field]=Start date/time&sort[0][direction]=desc`;
-      } else {
-        filterFormula = '?sort[0][field]=Start date/time&sort[0][direction]=desc';
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Error fetching admin bookings:', error);
+        throw error;
       }
       
-      const data = await airtableRequest(`/Bookings${filterFormula}`);
-      const bookings = data.records.map((record: any) => {
-        const startDateTime = record.fields['Start date/time'] || '';
-        const finishDateTime = record.fields['Finish date/time'] || '';
-        const [date, startTime] = startDateTime.split(' ');
-        const endTime = finishDateTime.split(' ')[1] || '';
-        
-        return {
-          id: record.id,
-          serviceId: record.fields['Service']?.[0],
-          serviceName: record.fields['Service Name']?.[0] || 'Paslauga',
-          date: date || '',
-          startTime: startTime || '',
-          endTime: endTime || '',
-          status: record.fields['Status'] || 'pending',
-          customerName: record.fields['Customer Name'],
-          customerPhone: record.fields['Customer Phone'],
-          customerEmail: record.fields['Customer Email'],
-          promoCode: record.fields['Promo Code'],
-          createdAt: record.fields['Created At'],
-        };
-      });
+      const bookings = (data || []).map((record: any) => ({
+        id: record.id,
+        serviceId: record.service_id,
+        serviceName: record.services?.name || 'Paslauga',
+        date: record.date,
+        startTime: record.start_time?.substring(0, 5),
+        endTime: record.end_time?.substring(0, 5),
+        status: record.status,
+        customerName: record.customer_name,
+        customerPhone: record.customer_phone,
+        customerEmail: record.customer_email,
+        promoCode: record.promo_code,
+        createdAt: record.created_at,
+      }));
       
       return new Response(JSON.stringify({ bookings }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -494,21 +475,22 @@ serve(async (req) => {
       const bookingId = path.split('/').pop();
       const body = await req.json();
       
-      await airtableRequest(`/Bookings/${bookingId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          fields: {
-            'Status': body.status,
-          }
-        }),
-      });
+      const { error } = await supabaseAdmin
+        .from('bookings')
+        .update({ status: body.status })
+        .eq('id', bookingId);
+      
+      if (error) {
+        console.error('Error updating booking:', error);
+        throw error;
+      }
       
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // GET /admin/settings - Get all settings (including password for editing)
+    // GET /admin/settings - Get all settings
     if (path === '/admin/settings' && req.method === 'GET') {
       const settings = await getSettings();
       
@@ -521,41 +503,18 @@ serve(async (req) => {
     if (path === '/admin/settings' && req.method === 'PUT') {
       const body = await req.json();
       
-      // Get existing records to update
-      const existingData = await airtableRequest('/Settings');
-      const updates: any[] = [];
-      
       for (const [key, value] of Object.entries(body)) {
-        const existingRecord = existingData.records.find((r: any) => 
-          (r.fields['Key'] || r.fields['Name']) === key
-        );
+        const { error } = await supabaseAdmin
+          .from('settings')
+          .upsert(
+            { key, value: String(value), updated_at: new Date().toISOString() },
+            { onConflict: 'key' }
+          );
         
-        if (existingRecord) {
-          updates.push({
-            id: existingRecord.id,
-            fields: { 'Value': value }
-          });
-        } else {
-          // Create new setting if doesn't exist
-          await airtableRequest('/Settings', {
-            method: 'POST',
-            body: JSON.stringify({
-              records: [{
-                fields: {
-                  'Name': key,
-                  'Value': String(value),
-                }
-              }]
-            }),
-          });
+        if (error) {
+          console.error(`Error updating setting ${key}:`, error);
+          throw error;
         }
-      }
-      
-      if (updates.length > 0) {
-        await airtableRequest('/Settings', {
-          method: 'PATCH',
-          body: JSON.stringify({ records: updates }),
-        });
       }
       
       return new Response(JSON.stringify({ success: true }), {
@@ -564,67 +523,79 @@ serve(async (req) => {
     }
 
     // PUT /admin/clients/:id - Update client (blacklist)
-    if (path.startsWith('/admin/clients/') && req.method === 'PUT') {
+    if (path.startsWith('/admin/clients/') && !path.includes('blacklist') && req.method === 'PUT') {
       const clientId = path.split('/').pop();
       const body = await req.json();
       
-      const fields: any = {};
+      const updates: any = { updated_at: new Date().toISOString() };
       if (body.isBlacklisted !== undefined) {
-        fields['Is Blacklisted'] = body.isBlacklisted;
+        updates.is_blacklisted = body.isBlacklisted;
       }
       if (body.blacklistReason) {
-        fields['Blacklist Reason'] = body.blacklistReason;
+        updates.blacklist_reason = body.blacklistReason;
       }
       if (body.noShowCount !== undefined) {
-        fields['No Show Count'] = body.noShowCount;
+        updates.no_show_count = body.noShowCount;
       }
       
-      await airtableRequest(`/Clients/${clientId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ fields }),
-      });
+      const { error } = await supabaseAdmin
+        .from('clients')
+        .update(updates)
+        .eq('id', clientId);
+      
+      if (error) {
+        console.error('Error updating client:', error);
+        throw error;
+      }
       
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // POST /admin/clients/blacklist - Add phone to blacklist (find or create client)
+    // POST /admin/clients/blacklist - Add phone to blacklist
     if (path === '/admin/clients/blacklist' && req.method === 'POST') {
       const body = await req.json();
       
       // Try to find existing client
-      const existingData = await airtableRequest(`/Clients?filterByFormula={Phone}='${body.phone}'`);
+      const { data: existingClient } = await supabaseAdmin
+        .from('clients')
+        .select('id, no_show_count')
+        .eq('phone', body.phone)
+        .single();
       
-      if (existingData.records.length > 0) {
+      if (existingClient) {
         // Update existing client
-        const client = existingData.records[0];
-        await airtableRequest(`/Clients/${client.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({
-            fields: {
-              'Is Blacklisted': true,
-              'Blacklist Reason': body.reason || 'No show',
-              'No Show Count': (client.fields['No Show Count'] || 0) + 1,
-            }
-          }),
-        });
+        const { error } = await supabaseAdmin
+          .from('clients')
+          .update({
+            is_blacklisted: true,
+            blacklist_reason: body.reason || 'No show',
+            no_show_count: (existingClient.no_show_count || 0) + 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingClient.id);
+        
+        if (error) {
+          console.error('Error blacklisting client:', error);
+          throw error;
+        }
       } else {
         // Create new client
-        await airtableRequest('/Clients', {
-          method: 'POST',
-          body: JSON.stringify({
-            records: [{
-              fields: {
-                'Phone': body.phone,
-                'Name': body.name || 'Unknown',
-                'Is Blacklisted': true,
-                'Blacklist Reason': body.reason || 'No show',
-                'No Show Count': 1,
-              }
-            }]
-          }),
-        });
+        const { error } = await supabaseAdmin
+          .from('clients')
+          .insert({
+            phone: body.phone,
+            name: body.name || null,
+            is_blacklisted: true,
+            blacklist_reason: body.reason || 'No show',
+            no_show_count: 1,
+          });
+        
+        if (error) {
+          console.error('Error creating blacklisted client:', error);
+          throw error;
+        }
       }
       
       return new Response(JSON.stringify({ success: true }), {
@@ -632,21 +603,30 @@ serve(async (req) => {
       });
     }
 
-    // GET /admin/services - Get all services from Airtable (including inactive)
+    // GET /admin/services - Get all services (including inactive)
     if (path === '/admin/services' && req.method === 'GET') {
-      console.log('Fetching all services from Airtable...');
-      const data = await airtableRequest('/Services?sort[0][field]=Sort order&sort[0][direction]=asc');
+      console.log('Fetching all services from Supabase...');
       
-      const services = data.records.map((record: any) => ({
+      const { data, error } = await supabaseAdmin
+        .from('services')
+        .select('*')
+        .order('sort_order', { ascending: true });
+      
+      if (error) {
+        console.error('Error fetching admin services:', error);
+        throw error;
+      }
+      
+      const services = (data || []).map((record: any) => ({
         id: record.id,
-        name: record.fields['Service name'] || '',
-        duration: record.fields['Duration (minutes)'] || 0,
-        preparationTime: record.fields['Preparation (minutes)'] || 0,
-        bookingTime: record.fields['Booking time (minutes)'] || 0,
-        price: record.fields['Regular price (EUR)'] || 0,
-        isActive: record.fields['Active?'] ?? true,
-        description: record.fields['Description'] || '',
-        sortOrder: record.fields['Sort order'] || 1,
+        name: record.name,
+        duration: record.duration,
+        preparationTime: record.preparation_time || 0,
+        bookingTime: record.duration + (record.preparation_time || 0),
+        price: record.price,
+        isActive: record.is_active,
+        description: record.description || '',
+        sortOrder: record.sort_order || 999,
       }));
       
       return new Response(JSON.stringify({ services }), {
@@ -654,188 +634,81 @@ serve(async (req) => {
       });
     }
 
-    // POST /admin/services - Create new service in Airtable
+    // POST /admin/services - Create new service
     if (path === '/admin/services' && req.method === 'POST') {
       const body = await req.json();
       console.log('Creating new service:', body);
       
-      const data = await airtableRequest('/Services', {
-        method: 'POST',
-        body: JSON.stringify({
-          records: [{
-            fields: {
-              'Service name': body.name,
-              'Duration (minutes)': body.duration,
-              'Preparation (minutes)': body.preparationTime,
-              // 'Booking time (minutes)' is a formula field - don't write to it
-              'Regular price (EUR)': body.price,
-              'Active?': body.isActive,
-              'Description': body.description,
-              'Sort order': body.sortOrder,
-            }
-          }]
-        }),
-      });
+      const { data, error } = await supabaseAdmin
+        .from('services')
+        .insert({
+          name: body.name,
+          duration: body.duration,
+          preparation_time: body.preparationTime || 0,
+          price: body.price,
+          is_active: body.isActive ?? true,
+          description: body.description || '',
+          sort_order: body.sortOrder || 999,
+        })
+        .select()
+        .single();
       
-      return new Response(JSON.stringify({ success: true, service: data.records[0] }), {
+      if (error) {
+        console.error('Error creating service:', error);
+        throw error;
+      }
+      
+      return new Response(JSON.stringify({ success: true, service: data }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // PUT /admin/services/:id - Update service in Airtable
+    // PUT /admin/services/:id - Update service
     if (path.match(/^\/admin\/services\/[^/]+$/) && req.method === 'PUT') {
       const serviceId = path.split('/').pop();
       const body = await req.json();
       console.log('Updating service:', serviceId, body);
       
-      const fields: any = {};
-      if (body.name !== undefined) fields['Service name'] = body.name;
-      if (body.duration !== undefined) fields['Duration (minutes)'] = body.duration;
-      if (body.preparationTime !== undefined) fields['Preparation (minutes)'] = body.preparationTime;
-      // 'Booking time (minutes)' is a formula field - don't write to it
-      if (body.price !== undefined) fields['Regular price (EUR)'] = body.price;
-      if (body.isActive !== undefined) fields['Active?'] = body.isActive;
-      if (body.description !== undefined) fields['Description'] = body.description;
-      if (body.sortOrder !== undefined) fields['Sort order'] = body.sortOrder;
+      const updates: any = {};
+      if (body.name !== undefined) updates.name = body.name;
+      if (body.duration !== undefined) updates.duration = body.duration;
+      if (body.preparationTime !== undefined) updates.preparation_time = body.preparationTime;
+      if (body.price !== undefined) updates.price = body.price;
+      if (body.isActive !== undefined) updates.is_active = body.isActive;
+      if (body.description !== undefined) updates.description = body.description;
+      if (body.sortOrder !== undefined) updates.sort_order = body.sortOrder;
       
-      await airtableRequest(`/Services/${serviceId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ fields }),
-      });
+      const { error } = await supabaseAdmin
+        .from('services')
+        .update(updates)
+        .eq('id', serviceId);
+      
+      if (error) {
+        console.error('Error updating service:', error);
+        throw error;
+      }
       
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // DELETE /admin/services/:id - Delete service from Airtable
+    // DELETE /admin/services/:id - Delete service
     if (path.match(/^\/admin\/services\/[^/]+$/) && req.method === 'DELETE') {
       const serviceId = path.split('/').pop();
       console.log('Deleting service:', serviceId);
       
-      await airtableRequest(`/Services/${serviceId}`, {
-        method: 'DELETE',
-      });
+      const { error } = await supabaseAdmin
+        .from('services')
+        .delete()
+        .eq('id', serviceId);
+      
+      if (error) {
+        console.error('Error deleting service:', error);
+        throw error;
+      }
       
       return new Response(JSON.stringify({ success: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // POST /admin/sync-services - Sync services from Airtable to Supabase
-    if (path === '/admin/sync-services' && req.method === 'POST') {
-      console.log('Starting services sync from Airtable to Supabase...');
-      
-      // 1. Fetch all services from Airtable
-      const airtableData = await airtableRequest('/Services');
-      console.log(`Found ${airtableData.records.length} services in Airtable`);
-      
-      // 2. Create Supabase client with service role
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-      
-      let synced = 0;
-      let errors: string[] = [];
-      
-      // 3. Upsert each service
-      for (const record of airtableData.records) {
-        const serviceName = record.fields['Service name'];
-        const duration = record.fields['Duration (minutes)'];
-        const price = record.fields['Regular price (EUR)'];
-        const isActive = record.fields['Active?'] ?? true;
-        const sortOrder = record.fields['Sort order'] ?? 999;
-        
-        if (!serviceName || !duration || price === undefined) {
-          console.log(`Skipping record ${record.id} - missing required fields`);
-          continue;
-        }
-        
-        // Check if service with this airtable_id exists
-        const { data: existingService } = await supabase
-          .from('services')
-          .select('id')
-          .eq('airtable_id', record.id)
-          .single();
-        
-        if (existingService) {
-          // Update existing
-          const { error } = await supabase
-            .from('services')
-            .update({
-              name: serviceName,
-              duration: duration,
-              price: price,
-              is_active: isActive,
-              sort_order: sortOrder,
-            })
-            .eq('airtable_id', record.id);
-          
-          if (error) {
-            console.error(`Error updating service ${record.id}:`, error);
-            errors.push(`Update ${serviceName}: ${error.message}`);
-          } else {
-            synced++;
-          }
-        } else {
-          // Insert new
-          const { error } = await supabase
-            .from('services')
-            .insert({
-              airtable_id: record.id,
-              name: serviceName,
-              duration: duration,
-              price: price,
-              is_active: isActive,
-              sort_order: sortOrder,
-            });
-          
-          if (error) {
-            console.error(`Error inserting service ${record.id}:`, error);
-            errors.push(`Insert ${serviceName}: ${error.message}`);
-          } else {
-            synced++;
-          }
-        }
-      }
-      
-      // 4. Delete services that no longer exist in Airtable
-      const airtableIds = airtableData.records.map((r: { id: string }) => r.id);
-      console.log(`Airtable has ${airtableIds.length} services, checking for orphaned records...`);
-
-      // Get all services from Supabase that have airtable_id
-      const { data: supabaseServices } = await supabase
-        .from('services')
-        .select('id, airtable_id, name')
-        .not('airtable_id', 'is', null);
-
-      let deleted = 0;
-      if (supabaseServices) {
-        for (const service of supabaseServices) {
-          if (service.airtable_id && !airtableIds.includes(service.airtable_id)) {
-            console.log(`Deleting orphaned service: ${service.name} (${service.airtable_id})`);
-            const { error } = await supabase
-              .from('services')
-              .delete()
-              .eq('id', service.id);
-            
-            if (error) {
-              console.error(`Error deleting service ${service.id}:`, error);
-              errors.push(`Delete ${service.name}: ${error.message}`);
-            } else {
-              deleted++;
-            }
-          }
-        }
-      }
-      
-      console.log(`Sync complete: ${synced} synced, ${deleted} deleted, ${errors.length} errors`);
-      
-      return new Response(JSON.stringify({ 
-        success: errors.length === 0,
-        synced,
-        deleted,
-        total: airtableData.records.length,
-        errors: errors.length > 0 ? errors : undefined,
-      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
