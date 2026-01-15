@@ -1,14 +1,18 @@
 import { useState, useMemo } from 'react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import { lt } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Booking } from '@/hooks/useBookings';
+import { ScheduleException } from '@/hooks/useScheduleExceptions';
 import { cn } from '@/lib/utils';
 
 interface AdminMonthCalendarProps {
   bookings: Booking[];
+  exceptions?: ScheduleException[];
   onBookingClick: (booking: Booking) => void;
+  onDayClick?: (date: Date) => void;
+  onDeleteException?: (exceptionId: string) => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -19,7 +23,13 @@ const STATUS_COLORS: Record<string, string> = {
   no_show: 'bg-gray-500/20 text-gray-700 border-gray-500/40',
 };
 
-export function AdminMonthCalendar({ bookings, onBookingClick }: AdminMonthCalendarProps) {
+export function AdminMonthCalendar({ 
+  bookings, 
+  exceptions = [],
+  onBookingClick, 
+  onDayClick,
+  onDeleteException,
+}: AdminMonthCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
   const calendarDays = useMemo(() => {
@@ -53,7 +63,31 @@ export function AdminMonthCalendar({ bookings, onBookingClick }: AdminMonthCalen
     return map;
   }, [bookings]);
 
+  // Group exceptions by date or day of week
+  const getExceptionsForDate = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const dayOfWeek = date.getDay();
+    
+    return exceptions.filter((ex) => {
+      if (ex.is_recurring && ex.day_of_week === dayOfWeek) {
+        return true;
+      }
+      if (!ex.is_recurring && ex.date === dateStr) {
+        return true;
+      }
+      return false;
+    });
+  };
+
   const weekDays = ['Pr', 'An', 'Tr', 'Kt', 'Pn', 'Št', 'Sk'];
+
+  const handleDayClick = (e: React.MouseEvent, date: Date) => {
+    // Only trigger if clicking on empty space, not on a booking
+    if ((e.target as HTMLElement).closest('button[data-booking]')) {
+      return;
+    }
+    onDayClick?.(date);
+  };
 
   return (
     <div className="bg-card rounded-lg border">
@@ -94,17 +128,19 @@ export function AdminMonthCalendar({ bookings, onBookingClick }: AdminMonthCalen
         {calendarDays.map((day, index) => {
           const dateKey = format(day, 'yyyy-MM-dd');
           const dayBookings = bookingsByDate.get(dateKey) || [];
+          const dayExceptions = getExceptionsForDate(day);
           const isCurrentMonth = isSameMonth(day, currentMonth);
           const isToday = isSameDay(day, new Date());
-          const maxVisible = 3;
+          const maxVisible = 2;
           const visibleBookings = dayBookings.slice(0, maxVisible);
           const hiddenCount = dayBookings.length - maxVisible;
 
           return (
             <div
               key={index}
+              onClick={(e) => handleDayClick(e, day)}
               className={cn(
-                'min-h-[100px] border-b border-r p-1 transition-colors',
+                'min-h-[100px] border-b border-r p-1 transition-colors cursor-pointer hover:bg-muted/20',
                 !isCurrentMonth && 'bg-muted/30',
                 index % 7 === 0 && 'border-l'
               )}
@@ -120,11 +156,45 @@ export function AdminMonthCalendar({ bookings, onBookingClick }: AdminMonthCalen
                 {format(day, 'd')}
               </div>
 
+              {/* Exceptions */}
+              {dayExceptions.map((exception) => (
+                <div
+                  key={exception.id}
+                  className={cn(
+                    'w-full px-1 py-0.5 rounded text-[10px] mb-1 flex items-center justify-between group',
+                    exception.exception_type === 'block'
+                      ? 'bg-red-500/20 text-red-700 border border-red-500/40'
+                      : 'bg-green-500/20 text-green-700 border border-green-500/40'
+                  )}
+                >
+                  <span className="truncate">
+                    {exception.exception_type === 'block' ? 'NESIREGISTRUOTI' : 'REGISTRUOTIS'}
+                    {exception.start_time && (
+                      <span className="ml-1 opacity-70">
+                        {exception.start_time.substring(0, 5)}-{exception.end_time.substring(0, 5)}
+                      </span>
+                    )}
+                  </span>
+                  {onDeleteException && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDeleteException(exception.id);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+
               {/* Bookings */}
               <div className="space-y-1">
                 {visibleBookings.map((booking) => (
                   <button
                     key={booking.id}
+                    data-booking
                     onClick={() => onBookingClick(booking)}
                     className={cn(
                       'w-full text-left px-1.5 py-0.5 rounded text-xs border truncate transition-all hover:opacity-80',

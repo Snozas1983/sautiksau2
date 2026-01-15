@@ -332,7 +332,7 @@ serve(async (req) => {
       
       console.log('Booking created:', newBooking.id);
 
-      // Send notifications asynchronously
+      // Send notifications asynchronously with manage_token
       fetch(`${SUPABASE_URL}/functions/v1/send-notifications`, {
         method: 'POST',
         headers: {
@@ -341,6 +341,7 @@ serve(async (req) => {
         },
         body: JSON.stringify({
           bookingId: newBooking.id,
+          manageToken: newBooking.manage_token,
           serviceName: service.name,
           date: body.date,
           startTime: body.startTime,
@@ -391,6 +392,69 @@ serve(async (req) => {
       }
       
       return new Response(JSON.stringify({ found: false, isBlacklisted: false }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // GET /booking/:token - Get booking by manage token (public)
+    if (path.match(/^\/booking\/[^/]+$/) && req.method === 'GET') {
+      const token = path.split('/').pop();
+      
+      const { data, error } = await supabaseAdmin
+        .from('bookings')
+        .select('*, services(name)')
+        .eq('manage_token', token)
+        .single();
+      
+      if (error || !data) {
+        return new Response(JSON.stringify({ error: 'Booking not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Get cancel hours setting
+      const settings = await getSettings();
+      const cancelHoursBefore = parseInt(settings['cancel_hours_before'] || '24');
+      
+      return new Response(JSON.stringify({
+        booking: {
+          id: data.id,
+          serviceName: data.services?.name || 'Paslauga',
+          date: data.date,
+          startTime: data.start_time?.substring(0, 5),
+          endTime: data.end_time?.substring(0, 5),
+          status: data.status,
+          customerName: data.customer_name,
+          cancelHoursBefore,
+        },
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // PUT /booking/:token - Update booking by token (cancel)
+    if (path.match(/^\/booking\/[^/]+$/) && req.method === 'PUT') {
+      const token = path.split('/').pop();
+      const body = await req.json();
+      
+      if (body.action === 'cancel') {
+        const { error } = await supabaseAdmin
+          .from('bookings')
+          .update({ status: 'cancelled' })
+          .eq('manage_token', token);
+        
+        if (error) {
+          throw error;
+        }
+        
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      return new Response(JSON.stringify({ error: 'Invalid action' }), {
+        status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -723,6 +787,87 @@ serve(async (req) => {
         console.error('Error deleting service:', error);
         throw error;
       }
+      
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // GET /admin/templates - Get all notification templates
+    if (path === '/admin/templates' && req.method === 'GET') {
+      const { data, error } = await supabaseAdmin
+        .from('notification_templates')
+        .select('*')
+        .order('type');
+      
+      if (error) throw error;
+      
+      return new Response(JSON.stringify({ templates: data }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // PUT /admin/templates/:id - Update template
+    if (path.match(/^\/admin\/templates\/[^/]+$/) && req.method === 'PUT') {
+      const templateId = path.split('/').pop();
+      const body = await req.json();
+      
+      const { error } = await supabaseAdmin
+        .from('notification_templates')
+        .update({
+          subject: body.subject,
+          body: body.body,
+          is_active: body.is_active,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', templateId);
+      
+      if (error) throw error;
+      
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // GET /admin/exceptions - Get all schedule exceptions
+    if (path === '/admin/exceptions' && req.method === 'GET') {
+      const { data, error } = await supabaseAdmin
+        .from('schedule_exceptions')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      return new Response(JSON.stringify({ exceptions: data }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // POST /admin/exceptions - Create exception
+    if (path === '/admin/exceptions' && req.method === 'POST') {
+      const body = await req.json();
+      
+      const { error } = await supabaseAdmin
+        .from('schedule_exceptions')
+        .insert(body);
+      
+      if (error) throw error;
+      
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // DELETE /admin/exceptions/:id - Delete exception
+    if (path.match(/^\/admin\/exceptions\/[^/]+$/) && req.method === 'DELETE') {
+      const exceptionId = path.split('/').pop();
+      
+      const { error } = await supabaseAdmin
+        .from('schedule_exceptions')
+        .delete()
+        .eq('id', exceptionId);
+      
+      if (error) throw error;
       
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { useAdminBookings, useUpdateBookingStatus, useAddToBlacklist, useRescheduleBooking, Booking } from '@/hooks/useBookings';
+import { useScheduleExceptions, useDeleteException } from '@/hooks/useScheduleExceptions';
 import { AdminMonthCalendar } from './AdminMonthCalendar';
 import { BookingDetailDialog } from './BookingDetailDialog';
 import { RescheduleDialog } from './RescheduleDialog';
 import { BlacklistConfirmDialog } from './BlacklistConfirmDialog';
-import { BookingFilters, FilterType } from './BookingFilters';
+import { ExceptionDialog } from './ExceptionDialog';
+import { BookingFilters } from './BookingFilters';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -28,6 +30,7 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
   const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
   const [blacklistBooking, setBlacklistBooking] = useState<Booking | null>(null);
+  const [exceptionDate, setExceptionDate] = useState<Date | null>(null);
   
   // Get bookings for current month and adjacent months
   const now = new Date();
@@ -40,12 +43,28 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
     dateTo,
   });
   
+  const { data: exceptions, refetch: refetchExceptions } = useScheduleExceptions(adminPassword);
+  const deleteException = useDeleteException();
+  
   const updateStatus = useUpdateBookingStatus();
   const addToBlacklist = useAddToBlacklist();
   const reschedule = useRescheduleBooking();
   
   const handleBookingClick = (booking: Booking) => {
     setSelectedBooking(booking);
+  };
+  
+  const handleDayClick = (date: Date) => {
+    setExceptionDate(date);
+  };
+  
+  const handleDeleteException = async (exceptionId: string) => {
+    try {
+      await deleteException.mutateAsync({ exceptionId, adminPassword });
+      toast.success('Išimtis ištrinta');
+    } catch {
+      toast.error('Klaida trinant išimtį');
+    }
   };
   
   const handleStatusChange = async (booking: Booking, newStatus: string) => {
@@ -147,7 +166,10 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
       ) : (
         <AdminMonthCalendar
           bookings={bookings || []}
+          exceptions={exceptions || []}
           onBookingClick={handleBookingClick}
+          onDayClick={handleDayClick}
+          onDeleteException={handleDeleteException}
         />
       )}
       
@@ -194,6 +216,15 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
         onClose={() => setBlacklistBooking(null)}
         onConfirm={handleBlacklistConfirm}
         customerName={blacklistBooking?.customerName}
+      />
+      
+      {/* Exception dialog */}
+      <ExceptionDialog
+        open={!!exceptionDate}
+        onClose={() => setExceptionDate(null)}
+        selectedDate={exceptionDate}
+        adminPassword={adminPassword}
+        onExceptionCreated={refetchExceptions}
       />
     </div>
   );

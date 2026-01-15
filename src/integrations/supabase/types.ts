@@ -50,6 +50,7 @@ export type Database = {
           date: string | null
           end_time: string | null
           id: string
+          manage_token: string | null
           promo_code: string | null
           service_id: string
           slot_id: string | null
@@ -64,6 +65,7 @@ export type Database = {
           date?: string | null
           end_time?: string | null
           id?: string
+          manage_token?: string | null
           promo_code?: string | null
           service_id: string
           slot_id?: string | null
@@ -78,6 +80,7 @@ export type Database = {
           date?: string | null
           end_time?: string | null
           id?: string
+          manage_token?: string | null
           promo_code?: string | null
           service_id?: string
           slot_id?: string | null
@@ -134,6 +137,39 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_templates: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          subject: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          subject?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          subject?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       promo_codes: {
         Row: {
           code: string
@@ -158,6 +194,42 @@ export type Database = {
           id?: string
           is_active?: boolean
           valid_until?: string | null
+        }
+        Relationships: []
+      }
+      schedule_exceptions: {
+        Row: {
+          created_at: string
+          date: string | null
+          day_of_week: number | null
+          description: string | null
+          end_time: string
+          exception_type: string
+          id: string
+          is_recurring: boolean
+          start_time: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string | null
+          day_of_week?: number | null
+          description?: string | null
+          end_time: string
+          exception_type: string
+          id?: string
+          is_recurring?: boolean
+          start_time: string
+        }
+        Update: {
+          created_at?: string
+          date?: string | null
+          day_of_week?: number | null
+          description?: string | null
+          end_time?: string
+          exception_type?: string
+          id?: string
+          is_recurring?: boolean
+          start_time?: string
         }
         Relationships: []
       }

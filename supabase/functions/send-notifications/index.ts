@@ -1,13 +1,19 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { Resend } from "https://esm.sh/resend@2.0.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
 interface NotificationRequest {
   bookingId: string;
+  manageToken: string;
   serviceName: string;
   date: string;
   startTime: string;
@@ -33,6 +39,38 @@ function formatDate(dateStr: string): string {
   return `${dayName}, ${month} ${day} d.`;
 }
 
+// Replace template placeholders with actual values
+function replaceTemplatePlaceholders(template: string, data: Record<string, string>): string {
+  let result = template;
+  for (const [key, value] of Object.entries(data)) {
+    result = result.replace(new RegExp(`{{${key}}}`, 'g'), value || '');
+  }
+  return result;
+}
+
+// Get notification templates from database
+async function getTemplates(): Promise<Record<string, { subject: string | null; body: string; is_active: boolean }>> {
+  const { data, error } = await supabaseAdmin
+    .from('notification_templates')
+    .select('type, subject, body, is_active');
+  
+  if (error) {
+    console.error('Error fetching templates:', error);
+    throw error;
+  }
+  
+  const templates: Record<string, { subject: string | null; body: string; is_active: boolean }> = {};
+  for (const row of data || []) {
+    templates[row.type] = {
+      subject: row.subject,
+      body: row.body,
+      is_active: row.is_active,
+    };
+  }
+  
+  return templates;
+}
+
 // Send email using Resend
 async function sendEmail(
   resend: InstanceType<typeof Resend>,
@@ -42,7 +80,7 @@ async function sendEmail(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const result = await resend.emails.send({
-      from: "SauTikSau <onboarding@resend.dev>",
+      from: "SauTikSau <info@sautiksau.lt>",
       to: [to],
       subject,
       html,
@@ -126,83 +164,63 @@ const handler = async (req: Request): Promise<Response> => {
     
     console.log("Sending notifications for booking:", data);
 
+    // Get templates from database
+    const templates = await getTemplates();
+    
+    // Prepare template data
     const formattedDate = formatDate(data.date);
+    const manageLink = `https://sau-tik-sau-zen.lovable.app/booking/${data.manageToken}`;
+    
+    const templateData: Record<string, string> = {
+      customer_name: data.customerName,
+      service_name: data.serviceName,
+      date: formattedDate,
+      start_time: data.startTime,
+      end_time: data.endTime,
+      customer_phone: data.customerPhone,
+      customer_email: data.customerEmail || '',
+      booking_id: data.bookingId,
+      manage_link: manageLink,
+    };
+
     const results: { adminEmail?: any; customerEmail?: any; customerSMS?: any } = {};
 
     // 1. Send email to admin
-    const adminHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">🎉 Nauja rezervacija!</h2>
-        
-        <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #666;">Rezervacijos informacija</h3>
-          <p><strong>Paslauga:</strong> ${data.serviceName}</p>
-          <p><strong>Data:</strong> ${formattedDate}</p>
-          <p><strong>Laikas:</strong> ${data.startTime} - ${data.endTime}</p>
-        </div>
-        
-        <div style="background: #e8f4f8; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <h3 style="margin-top: 0; color: #666;">Kliento informacija</h3>
-          <p><strong>Vardas:</strong> ${data.customerName}</p>
-          <p><strong>Telefonas:</strong> <a href="tel:${data.customerPhone}">${data.customerPhone}</a></p>
-          ${data.customerEmail ? `<p><strong>El. paštas:</strong> <a href="mailto:${data.customerEmail}">${data.customerEmail}</a></p>` : ''}
-        </div>
-        
-        <p style="color: #999; font-size: 12px;">
-          Rezervacijos ID: ${data.bookingId}
-        </p>
-      </div>
-    `;
-
-    results.adminEmail = await sendEmail(
-      resend,
-      "info@sautiksau.lt",
-      `Nauja rezervacija: ${data.customerName} - ${formattedDate} ${data.startTime}`,
-      adminHtml
-    );
-
-    // 2. Send email to customer (if email provided)
-    if (data.customerEmail) {
-      const customerHtml = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #333;">Sveiki, ${data.customerName}! 👋</h2>
-          
-          <p>Jūsų rezervacija <strong>SauTikSau</strong> patvirtinta!</p>
-          
-          <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-            <h3 style="margin-top: 0; color: #666;">Rezervacijos detalės</h3>
-            <p><strong>Paslauga:</strong> ${data.serviceName}</p>
-            <p><strong>Data:</strong> ${formattedDate}</p>
-            <p><strong>Laikas:</strong> ${data.startTime} - ${data.endTime}</p>
-          </div>
-          
-          <p><strong>Adresas:</strong> Vilnius (tikslus adresas bus atsiųstas prieš vizitą)</p>
-          
-          <p style="color: #666;">
-            Jei reikia atšaukti ar pakeisti rezervaciją, susisiekite:<br>
-            📧 <a href="mailto:info@sautiksau.lt">info@sautiksau.lt</a><br>
-            📱 <a href="tel:+37060000000">+370 600 00000</a>
-          </p>
-          
-          <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-          
-          <p style="color: #999; font-size: 12px;">
-            SauTikSau masažai | <a href="https://sautiksau.lt">sautiksau.lt</a>
-          </p>
-        </div>
-      `;
-
-      results.customerEmail = await sendEmail(
+    const adminTemplate = templates['email_admin'];
+    if (adminTemplate?.is_active) {
+      const adminSubject = replaceTemplatePlaceholders(adminTemplate.subject || '', templateData);
+      const adminBody = replaceTemplatePlaceholders(adminTemplate.body, templateData);
+      
+      results.adminEmail = await sendEmail(
         resend,
-        data.customerEmail,
-        `Rezervacija patvirtinta - ${formattedDate} ${data.startTime}`,
-        customerHtml
+        "info@sautiksau.lt",
+        adminSubject,
+        adminBody
       );
     }
 
+    // 2. Send email to customer (if email provided)
+    if (data.customerEmail) {
+      const customerTemplate = templates['email_customer'];
+      if (customerTemplate?.is_active) {
+        const customerSubject = replaceTemplatePlaceholders(customerTemplate.subject || '', templateData);
+        const customerBody = replaceTemplatePlaceholders(customerTemplate.body, templateData);
+        
+        results.customerEmail = await sendEmail(
+          resend,
+          data.customerEmail,
+          customerSubject,
+          customerBody
+        );
+      }
+    }
+
     // 3. Send SMS to customer
-    const smsMessage = `SauTikSau: Rezervacija patvirtinta! ${data.serviceName}, ${data.date} ${data.startTime}. Info: info@sautiksau.lt`;
-    results.customerSMS = await sendSMS(data.customerPhone, smsMessage);
+    const smsTemplate = templates['sms_customer'];
+    if (smsTemplate?.is_active) {
+      const smsBody = replaceTemplatePlaceholders(smsTemplate.body, templateData);
+      results.customerSMS = await sendSMS(data.customerPhone, smsBody);
+    }
 
     console.log("Notification results:", results);
 
