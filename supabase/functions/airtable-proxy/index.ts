@@ -331,7 +331,7 @@ serve(async (req) => {
       
       // Combine date and time into Airtable's expected format: "YYYY-MM-DD HH:MM"
       const startDateTime = `${body.date} ${body.startTime}`;
-      const endDateTime = `${body.date} ${body.endTime}`;
+      // Note: 'Finish date/time' is a computed field in Airtable (calculated from start + service duration)
       
       const data = await airtableRequest('/Bookings', {
         method: 'POST',
@@ -340,7 +340,6 @@ serve(async (req) => {
             fields: {
               'Service': [serviceAirtableId],
               'Start date/time': startDateTime,
-              'Finish date/time': endDateTime,
               'Customer Name': body.customerName,
               'Customer Phone': body.customerPhone,
               'Customer Email': body.customerEmail || '',
