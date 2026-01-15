@@ -6,19 +6,11 @@ import { AdminMonthCalendar } from './AdminMonthCalendar';
 import { BookingDetailDialog } from './BookingDetailDialog';
 import { RescheduleDialog } from './RescheduleDialog';
 import { BlacklistConfirmDialog } from './BlacklistConfirmDialog';
+import { CancelBookingDialog } from './CancelBookingDialog';
 import { ExceptionDialog } from './ExceptionDialog';
 import { BookingFilters } from './BookingFilters';
 import { toast } from 'sonner';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CalendarTabProps {
   adminPassword: string;
@@ -114,20 +106,52 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
     setCancelBooking(booking);
   };
   
-  const handleCancelConfirm = async () => {
+  const [isCancelling, setIsCancelling] = useState(false);
+  
+  const handleCancelConfirm = async (sendNotifications: { sms: boolean; email: boolean }) => {
     if (!cancelBooking) return;
     
+    setIsCancelling(true);
     try {
+      // 1. Update booking status to cancelled
       await updateStatus.mutateAsync({
         bookingId: cancelBooking.id,
         status: 'cancelled',
         adminPassword,
       });
       
-      toast.success('Vizitas atšauktas');
+      // 2. Send notifications if requested
+      if (sendNotifications.sms || sendNotifications.email) {
+        try {
+          await supabase.functions.invoke('send-notifications', {
+            body: {
+              type: 'cancellation',
+              bookingId: cancelBooking.id,
+              serviceName: cancelBooking.serviceName || '',
+              date: cancelBooking.date,
+              startTime: cancelBooking.startTime,
+              endTime: cancelBooking.endTime,
+              customerName: cancelBooking.customerName,
+              customerPhone: cancelBooking.customerPhone,
+              customerEmail: cancelBooking.customerEmail,
+              sendSms: sendNotifications.sms,
+              sendEmail: sendNotifications.email,
+            },
+          });
+          toast.success('Vizitas atšauktas, pranešimas išsiųstas');
+        } catch (notifError) {
+          console.error('Notification error:', notifError);
+          toast.success('Vizitas atšauktas, bet pranešimo išsiųsti nepavyko');
+        }
+      } else {
+        toast.success('Vizitas atšauktas');
+      }
+      
       setCancelBooking(null);
     } catch {
       toast.error('Klaida atšaukiant vizitą');
+    } finally {
+      setIsCancelling(false);
     }
   };
   
@@ -193,22 +217,13 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
       />
       
       {/* Cancel confirmation dialog */}
-      <AlertDialog open={!!cancelBooking} onOpenChange={() => setCancelBooking(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Atšaukti vizitą?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Ar tikrai norite atšaukti {cancelBooking?.customerName} vizitą {cancelBooking?.date} {cancelBooking?.startTime}?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Ne</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancelConfirm}>
-              Taip, atšaukti
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <CancelBookingDialog
+        booking={cancelBooking}
+        open={!!cancelBooking}
+        onClose={() => setCancelBooking(null)}
+        onConfirm={handleCancelConfirm}
+        isLoading={isCancelling}
+      />
       
       {/* Blacklist dialog */}
       <BlacklistConfirmDialog

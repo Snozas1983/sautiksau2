@@ -12,15 +12,20 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 interface NotificationRequest {
+  type?: 'booking' | 'cancellation'; // Default: 'booking'
   bookingId: string;
-  manageToken: string;
+  manageToken?: string;
   serviceName: string;
+  servicePrice?: string;
   date: string;
   startTime: string;
   endTime: string;
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
+  // For cancellation - which notifications to send
+  sendSms?: boolean;
+  sendEmail?: boolean;
 }
 
 // Format date from YYYY-MM-DD to readable Lithuanian format
@@ -161,19 +166,24 @@ const handler = async (req: Request): Promise<Response> => {
 
     const resend = new Resend(resendApiKey);
     const data: NotificationRequest = await req.json();
+    const notificationType = data.type || 'booking';
     
-    console.log("Sending notifications for booking:", data);
+    console.log(`Sending ${notificationType} notifications for booking:`, data);
 
     // Get templates from database
     const templates = await getTemplates();
     
     // Prepare template data
     const formattedDate = formatDate(data.date);
-    const manageLink = `https://sau-tik-sau-zen.lovable.app/booking/${data.manageToken}`;
+    const manageLink = data.manageToken 
+      ? `https://sau-tik-sau-zen.lovable.app/booking/${data.manageToken}`
+      : 'https://sau-tik-sau-zen.lovable.app';
+    const bookingLink = 'https://sau-tik-sau-zen.lovable.app';
     
     const templateData: Record<string, string> = {
       customer_name: data.customerName,
       service_name: data.serviceName,
+      price: data.servicePrice || '',
       date: formattedDate,
       start_time: data.startTime,
       end_time: data.endTime,
@@ -181,45 +191,79 @@ const handler = async (req: Request): Promise<Response> => {
       customer_email: data.customerEmail || '',
       booking_id: data.bookingId,
       manage_link: manageLink,
+      booking_link: bookingLink,
     };
 
     const results: { adminEmail?: any; customerEmail?: any; customerSMS?: any } = {};
 
-    // 1. Send email to admin
-    const adminTemplate = templates['email_admin'];
-    if (adminTemplate?.is_active) {
-      const adminSubject = replaceTemplatePlaceholders(adminTemplate.subject || '', templateData);
-      const adminBody = replaceTemplatePlaceholders(adminTemplate.body, templateData);
+    if (notificationType === 'booking') {
+      // ===== BOOKING NOTIFICATIONS =====
       
-      results.adminEmail = await sendEmail(
-        resend,
-        "info@sautiksau.lt",
-        adminSubject,
-        adminBody
-      );
-    }
-
-    // 2. Send email to customer (if email provided)
-    if (data.customerEmail) {
-      const customerTemplate = templates['email_customer'];
-      if (customerTemplate?.is_active) {
-        const customerSubject = replaceTemplatePlaceholders(customerTemplate.subject || '', templateData);
-        const customerBody = replaceTemplatePlaceholders(customerTemplate.body, templateData);
+      // 1. Send email to admin
+      const adminTemplate = templates['email_admin'];
+      if (adminTemplate?.is_active) {
+        const adminSubject = replaceTemplatePlaceholders(adminTemplate.subject || '', templateData);
+        const adminBody = replaceTemplatePlaceholders(adminTemplate.body, templateData);
         
-        results.customerEmail = await sendEmail(
+        results.adminEmail = await sendEmail(
           resend,
-          data.customerEmail,
-          customerSubject,
-          customerBody
+          "info@sautiksau.lt",
+          adminSubject,
+          adminBody
         );
       }
-    }
 
-    // 3. Send SMS to customer
-    const smsTemplate = templates['sms_customer'];
-    if (smsTemplate?.is_active) {
-      const smsBody = replaceTemplatePlaceholders(smsTemplate.body, templateData);
-      results.customerSMS = await sendSMS(data.customerPhone, smsBody);
+      // 2. Send email to customer (if email provided)
+      if (data.customerEmail) {
+        const customerTemplate = templates['email_customer'];
+        if (customerTemplate?.is_active) {
+          const customerSubject = replaceTemplatePlaceholders(customerTemplate.subject || '', templateData);
+          const customerBody = replaceTemplatePlaceholders(customerTemplate.body, templateData);
+          
+          results.customerEmail = await sendEmail(
+            resend,
+            data.customerEmail,
+            customerSubject,
+            customerBody
+          );
+        }
+      }
+
+      // 3. Send SMS to customer
+      const smsTemplate = templates['sms_customer'];
+      if (smsTemplate?.is_active) {
+        const smsBody = replaceTemplatePlaceholders(smsTemplate.body, templateData);
+        results.customerSMS = await sendSMS(data.customerPhone, smsBody);
+      }
+      
+    } else if (notificationType === 'cancellation') {
+      // ===== CANCELLATION NOTIFICATIONS =====
+      // Only send to customer, based on sendSms/sendEmail flags
+      
+      // 1. Send cancellation email to customer
+      if (data.sendEmail && data.customerEmail) {
+        const cancelEmailTemplate = templates['email_cancel_customer'];
+        if (cancelEmailTemplate?.is_active) {
+          const subject = replaceTemplatePlaceholders(cancelEmailTemplate.subject || '', templateData);
+          const body = replaceTemplatePlaceholders(cancelEmailTemplate.body, templateData);
+          
+          results.customerEmail = await sendEmail(
+            resend,
+            data.customerEmail,
+            subject,
+            body
+          );
+        }
+      }
+
+      // 2. Send cancellation SMS to customer
+      if (data.sendSms) {
+        const cancelSmsTemplate = templates['sms_cancel_customer'];
+        if (cancelSmsTemplate?.is_active) {
+          const smsBody = replaceTemplatePlaceholders(cancelSmsTemplate.body, templateData);
+          results.customerSMS = await sendSMS(data.customerPhone, smsBody);
+        }
+      }
     }
 
     console.log("Notification results:", results);
