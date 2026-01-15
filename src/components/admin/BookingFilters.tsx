@@ -61,7 +61,6 @@ export function BookingFilters({
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">Visi statusai</SelectItem>
-          <SelectItem value="pending">Laukia</SelectItem>
           <SelectItem value="confirmed">Patvirtinti</SelectItem>
           <SelectItem value="completed">Atlikti</SelectItem>
           <SelectItem value="no_show">Neatvyko</SelectItem>

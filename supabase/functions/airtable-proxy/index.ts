@@ -127,7 +127,7 @@ serve(async (req) => {
         .select('date, start_time, end_time')
         .gte('date', startDateStr)
         .lte('date', endDateStr)
-        .in('status', ['pending', 'confirmed']);
+        .eq('status', 'confirmed');
       
       if (bookingsError) {
         console.error('Error fetching bookings:', bookingsError);
@@ -241,7 +241,7 @@ serve(async (req) => {
       let query = supabaseAdmin
         .from('bookings')
         .select('*, services(name)')
-        .in('status', ['pending', 'confirmed']);
+        .eq('status', 'confirmed');
       
       if (date) {
         query = query.eq('date', date);
@@ -285,10 +285,25 @@ serve(async (req) => {
         customerName: body.customerName,
       });
       
+      // Check if client is blacklisted
+      let isBlacklisted = false;
+      let blacklistReason = '';
+      const { data: clientData } = await supabaseAdmin
+        .from('clients')
+        .select('is_blacklisted, blacklist_reason')
+        .eq('phone', body.customerPhone)
+        .single();
+      
+      if (clientData?.is_blacklisted) {
+        isBlacklisted = true;
+        blacklistReason = clientData.blacklist_reason || 'Neatvyko';
+        console.log('BLACKLISTED CLIENT booking:', body.customerPhone);
+      }
+      
       // Get service details
       const { data: service, error: serviceError } = await supabaseAdmin
         .from('services')
-        .select('id, name, duration')
+        .select('id, name, duration, price')
         .eq('id', body.serviceId)
         .single();
       
@@ -320,7 +335,7 @@ serve(async (req) => {
           customer_phone: body.customerPhone,
           customer_email: body.customerEmail || null,
           promo_code: body.promoCode || null,
-          status: 'pending',
+          status: 'confirmed',
         })
         .select()
         .single();
@@ -353,6 +368,30 @@ serve(async (req) => {
       })
         .then(res => console.log('send-notifications response status:', res.status))
         .catch(err => console.error('Failed to send notifications:', err));
+      
+      // If blacklisted, send admin warning email
+      if (isBlacklisted) {
+        fetch(`${SUPABASE_URL}/functions/v1/send-notifications`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({
+            type: 'blacklist_warning',
+            bookingId: newBooking.id,
+            serviceName: service.name,
+            date: body.date,
+            startTime: body.startTime,
+            endTime: endTime,
+            customerName: body.customerName,
+            customerPhone: body.customerPhone,
+            blacklistReason: blacklistReason,
+          }),
+        })
+          .then(res => console.log('blacklist-warning notification status:', res.status))
+          .catch(err => console.error('Failed to send blacklist warning:', err));
+      }
       
       return new Response(JSON.stringify({ success: true, booking: newBooking }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -514,6 +553,19 @@ serve(async (req) => {
         throw error;
       }
       
+      // Get all unique phone numbers to check blacklist status
+      const phones = [...new Set((data || []).map((r: any) => r.customer_phone))];
+      const { data: clientsData } = await supabaseAdmin
+        .from('clients')
+        .select('phone, is_blacklisted')
+        .in('phone', phones);
+      
+      const blacklistedPhones = new Set(
+        (clientsData || [])
+          .filter((c: any) => c.is_blacklisted)
+          .map((c: any) => c.phone)
+      );
+      
       const bookings = (data || []).map((record: any) => ({
         id: record.id,
         serviceId: record.service_id,
@@ -527,6 +579,7 @@ serve(async (req) => {
         customerEmail: record.customer_email,
         promoCode: record.promo_code,
         createdAt: record.created_at,
+        isBlacklisted: blacklistedPhones.has(record.customer_phone),
       }));
       
       return new Response(JSON.stringify({ bookings }), {

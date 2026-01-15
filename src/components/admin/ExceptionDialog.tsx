@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { lt } from 'date-fns/locale';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { TimeInput } from '@/components/ui/time-input';
 import {
   Dialog,
   DialogContent,
@@ -15,14 +16,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { toast } from 'sonner';
+import { ScheduleException } from '@/hooks/useScheduleExceptions';
 
 interface ExceptionDialogProps {
   open: boolean;
@@ -30,6 +25,7 @@ interface ExceptionDialogProps {
   selectedDate: Date | null;
   adminPassword: string;
   onExceptionCreated: () => void;
+  existingException?: ScheduleException | null;
 }
 
 interface TimeInterval {
@@ -44,6 +40,7 @@ export function ExceptionDialog({
   selectedDate,
   adminPassword,
   onExceptionCreated,
+  existingException,
 }: ExceptionDialogProps) {
   const [isFullDay, setIsFullDay] = useState(true);
   const [intervals, setIntervals] = useState<TimeInterval[]>([
@@ -55,11 +52,35 @@ export function ExceptionDialog({
 
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
+  // When opening with an existing exception, populate the form
+  useEffect(() => {
+    if (existingException) {
+      // Check if it's full day (00:00-23:59 or similar)
+      const startTime = existingException.start_time?.substring(0, 5) || '00:00';
+      const endTime = existingException.end_time?.substring(0, 5) || '23:59';
+      
+      const isFullDayException = 
+        (startTime === '00:00' && (endTime === '23:59' || endTime === '23:45')) ||
+        (startTime === '09:00' && endTime === '18:00' && existingException.exception_type === 'block');
+      
+      setIsFullDay(isFullDayException);
+      setIntervals([{ id: '1', startTime, endTime }]);
+      setIsRecurring(existingException.is_recurring);
+      setDescription(existingException.description || '');
+    } else {
+      // Reset to defaults for new exception
+      setIsFullDay(true);
+      setIntervals([{ id: '1', startTime: '09:00', endTime: '18:00' }]);
+      setIsRecurring(false);
+      setDescription('');
+    }
+  }, [existingException, open]);
+
   if (!selectedDate) return null;
 
   const dayOfWeek = selectedDate.getDay();
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-  const exceptionType = isWeekend ? 'allow' : 'block';
+  const exceptionType = existingException?.exception_type || (isWeekend ? 'allow' : 'block');
 
   const dayNames = ['Sekmadienį', 'Pirmadienį', 'Antradienį', 'Trečiadienį', 'Ketvirtadienį', 'Penktadienį', 'Šeštadienį'];
 
@@ -134,12 +155,16 @@ export function ExceptionDialog({
     onClose();
   };
 
+  const isViewingExisting = !!existingException;
+
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {isWeekend ? 'Leisti registraciją' : 'Blokuoti laiką'}
+            {isViewingExisting 
+              ? 'Išimties detalės' 
+              : (isWeekend ? 'Leisti registraciją' : 'Blokuoti laiką')}
           </DialogTitle>
           <DialogDescription>
             {format(selectedDate, "EEEE, MMMM d 'd.'", { locale: lt })}
@@ -147,8 +172,8 @@ export function ExceptionDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
-          {/* Full day toggle (only for blocking) */}
-          {!isWeekend && (
+          {/* Full day toggle (only for blocking, and only for new exceptions) */}
+          {!isWeekend && !isViewingExisting && (
             <div className="flex items-center justify-between">
               <Label htmlFor="full-day">Visa diena</Label>
               <Switch
@@ -160,29 +185,27 @@ export function ExceptionDialog({
           )}
 
           {/* Time intervals */}
-          {(!isFullDay || isWeekend) && (
+          {((!isFullDay || isWeekend) || isViewingExisting) && (
             <div className="space-y-3">
               <Label>Laiko intervalai</Label>
-              {intervals.map((interval, index) => (
+              {intervals.map((interval) => (
                 <div key={interval.id} className="flex items-center gap-2">
-                  <Input
-                    type="time"
+                  <TimeInput
                     value={interval.startTime}
-                    onChange={(e) =>
-                      handleIntervalChange(interval.id, 'startTime', e.target.value)
+                    onChange={(value) =>
+                      handleIntervalChange(interval.id, 'startTime', value)
                     }
-                    className="flex-1"
+                    disabled={isViewingExisting}
                   />
                   <span className="text-muted-foreground">-</span>
-                  <Input
-                    type="time"
+                  <TimeInput
                     value={interval.endTime}
-                    onChange={(e) =>
-                      handleIntervalChange(interval.id, 'endTime', e.target.value)
+                    onChange={(value) =>
+                      handleIntervalChange(interval.id, 'endTime', value)
                     }
-                    className="flex-1"
+                    disabled={isViewingExisting}
                   />
-                  {intervals.length > 1 && (
+                  {intervals.length > 1 && !isViewingExisting && (
                     <Button
                       variant="ghost"
                       size="icon"
@@ -193,54 +216,67 @@ export function ExceptionDialog({
                   )}
                 </div>
               ))}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleAddInterval}
-                className="w-full"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Pridėti intervalą
-              </Button>
+              {!isViewingExisting && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddInterval}
+                  className="w-full"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Pridėti intervalą
+                </Button>
+              )}
             </div>
           )}
 
           {/* Recurring toggle */}
-          <div className="flex items-start gap-3 pt-2">
-            <Checkbox
-              id="recurring"
-              checked={isRecurring}
-              onCheckedChange={(checked) => setIsRecurring(checked === true)}
-            />
-            <div className="grid gap-1.5 leading-none">
-              <Label htmlFor="recurring" className="cursor-pointer">
-                Kartoti kiekvieną savaitę
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Ši išimtis bus taikoma kiekvieną {dayNames[dayOfWeek].toLowerCase()}
-              </p>
+          {!isViewingExisting && (
+            <div className="flex items-start gap-3 pt-2">
+              <Checkbox
+                id="recurring"
+                checked={isRecurring}
+                onCheckedChange={(checked) => setIsRecurring(checked === true)}
+              />
+              <div className="grid gap-1.5 leading-none">
+                <Label htmlFor="recurring" className="cursor-pointer">
+                  Kartoti kiekvieną savaitę
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Ši išimtis bus taikoma kiekvieną {dayNames[dayOfWeek].toLowerCase()}
+                </p>
+              </div>
             </div>
-          </div>
+          )}
+          
+          {isViewingExisting && isRecurring && (
+            <p className="text-sm text-muted-foreground">
+              ✓ Kartojama kiekvieną {dayNames[dayOfWeek].toLowerCase()}
+            </p>
+          )}
 
           {/* Description */}
           <div className="space-y-2">
-            <Label htmlFor="description">Aprašymas (neprivaloma)</Label>
+            <Label htmlFor="description">Aprašymas {!isViewingExisting && '(neprivaloma)'}</Label>
             <Input
               id="description"
               placeholder="Pvz.: Atostogos, Pietų pertrauka..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              disabled={isViewingExisting}
             />
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={handleClose}>
-            Atšaukti
+            {isViewingExisting ? 'Uždaryti' : 'Atšaukti'}
           </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'Saugoma...' : 'Sukurti'}
-          </Button>
+          {!isViewingExisting && (
+            <Button onClick={handleSubmit} disabled={isSubmitting}>
+              {isSubmitting ? 'Saugoma...' : 'Sukurti'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

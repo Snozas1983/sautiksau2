@@ -12,7 +12,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 interface NotificationRequest {
-  type?: 'booking' | 'cancellation'; // Default: 'booking'
+  type?: 'booking' | 'cancellation' | 'blacklist_warning'; // Default: 'booking'
   bookingId: string;
   manageToken?: string;
   serviceName: string;
@@ -26,6 +26,8 @@ interface NotificationRequest {
   // For cancellation - which notifications to send
   sendSms?: boolean;
   sendEmail?: boolean;
+  // For blacklist warning
+  blacklistReason?: string;
 }
 
 // Format date from YYYY-MM-DD to readable Lithuanian format
@@ -263,6 +265,25 @@ const handler = async (req: Request): Promise<Response> => {
           const smsBody = replaceTemplatePlaceholders(cancelSmsTemplate.body, templateData);
           results.customerSMS = await sendSMS(data.customerPhone, smsBody);
         }
+      }
+    } else if (notificationType === 'blacklist_warning') {
+      // ===== BLACKLIST WARNING TO ADMIN =====
+      const blacklistTemplateData = {
+        ...templateData,
+        blacklist_reason: data.blacklistReason || 'Neatvyko',
+      };
+      
+      const blacklistTemplate = templates['email_admin_blacklist'];
+      if (blacklistTemplate?.is_active) {
+        const subject = replaceTemplatePlaceholders(blacklistTemplate.subject || '', blacklistTemplateData);
+        const body = replaceTemplatePlaceholders(blacklistTemplate.body, blacklistTemplateData);
+        
+        results.adminEmail = await sendEmail(
+          resend,
+          "info@sautiksau.lt",
+          subject,
+          body
+        );
       }
     }
 

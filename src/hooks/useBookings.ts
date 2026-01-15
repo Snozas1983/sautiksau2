@@ -9,12 +9,13 @@ export interface Booking {
   date: string;
   startTime: string;
   endTime: string;
-  status: 'pending' | 'confirmed' | 'completed' | 'no_show' | 'cancelled';
+  status: 'confirmed' | 'completed' | 'no_show' | 'cancelled';
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
   promoCode?: string;
   createdAt?: string;
+  isBlacklisted?: boolean;
 }
 
 export interface CreateBookingData {

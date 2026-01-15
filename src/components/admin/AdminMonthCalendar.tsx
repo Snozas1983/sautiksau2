@@ -13,14 +13,15 @@ interface AdminMonthCalendarProps {
   onBookingClick: (booking: Booking) => void;
   onDayClick?: (date: Date) => void;
   onDeleteException?: (exceptionId: string) => void;
+  onExceptionClick?: (exception: ScheduleException, date: Date) => void;
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/20 text-yellow-700 border-yellow-500/40',
   confirmed: 'bg-green-500/20 text-green-700 border-green-500/40',
   completed: 'bg-blue-500/20 text-blue-700 border-blue-500/40',
   cancelled: 'bg-red-500/20 text-red-700 border-red-500/40',
   no_show: 'bg-gray-500/20 text-gray-700 border-gray-500/40',
+  blacklisted: 'bg-black/80 text-white border-black',
 };
 
 export function AdminMonthCalendar({ 
@@ -29,6 +30,7 @@ export function AdminMonthCalendar({
   onBookingClick, 
   onDayClick,
   onDeleteException,
+  onExceptionClick,
 }: AdminMonthCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -160,8 +162,12 @@ export function AdminMonthCalendar({
               {dayExceptions.map((exception) => (
                 <div
                   key={exception.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onExceptionClick?.(exception, day);
+                  }}
                   className={cn(
-                    'w-full px-1 py-0.5 rounded text-[10px] mb-1 flex items-center justify-between group',
+                    'w-full px-1 py-0.5 rounded text-[10px] mb-1 flex items-center justify-between group cursor-pointer hover:opacity-80',
                     exception.exception_type === 'block'
                       ? 'bg-red-500/20 text-red-700 border border-red-500/40'
                       : 'bg-green-500/20 text-green-700 border border-green-500/40'
@@ -198,7 +204,9 @@ export function AdminMonthCalendar({
                     onClick={() => onBookingClick(booking)}
                     className={cn(
                       'w-full text-left px-1.5 py-0.5 rounded text-xs border truncate transition-all hover:opacity-80',
-                      STATUS_COLORS[booking.status] || STATUS_COLORS.pending
+                      booking.isBlacklisted 
+                        ? STATUS_COLORS.blacklisted 
+                        : (STATUS_COLORS[booking.status] || STATUS_COLORS.confirmed)
                     )}
                   >
                     <span className="font-medium">{booking.startTime}</span>

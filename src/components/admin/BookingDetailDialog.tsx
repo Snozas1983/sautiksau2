@@ -27,7 +27,6 @@ interface BookingDetailDialogProps {
 }
 
 const STATUS_OPTIONS = [
-  { value: 'pending', label: 'Laukia patvirtinimo' },
   { value: 'confirmed', label: 'Patvirtinta' },
   { value: 'completed', label: 'Įvykdyta' },
   { value: 'no_show', label: 'Neatvyko' },
@@ -35,7 +34,6 @@ const STATUS_OPTIONS = [
 ];
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'text-yellow-600',
   confirmed: 'text-green-600',
   completed: 'text-blue-600',
   cancelled: 'text-red-600',

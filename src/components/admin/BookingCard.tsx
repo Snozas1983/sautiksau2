@@ -12,7 +12,6 @@ interface BookingCardProps {
 }
 
 const statusLabels: Record<string, string> = {
-  pending: 'Laukia',
   confirmed: 'Patvirtinta',
   completed: 'Atlikta',
   no_show: 'Neatvyko',
@@ -20,7 +19,6 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-500/20 text-yellow-700',
   confirmed: 'bg-blue-500/20 text-blue-700',
   completed: 'bg-green-500/20 text-green-700',
   no_show: 'bg-red-500/20 text-red-700',
@@ -79,7 +77,6 @@ export function BookingCard({ booking, onStatusChange }: BookingCardProps) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="pending">Laukia</SelectItem>
             <SelectItem value="confirmed">Patvirtinta</SelectItem>
             <SelectItem value="completed">Atlikta</SelectItem>
             <SelectItem value="no_show">Neatvyko</SelectItem>

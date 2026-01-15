@@ -30,7 +30,6 @@ interface BookingDetails {
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  pending: 'Laukiama patvirtinimo',
   confirmed: 'Patvirtinta',
   completed: 'Įvykdyta',
   cancelled: 'Atšaukta',
@@ -38,7 +37,6 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-500/20 text-yellow-700',
   confirmed: 'bg-green-500/20 text-green-700',
   completed: 'bg-blue-500/20 text-blue-700',
   cancelled: 'bg-red-500/20 text-red-700',

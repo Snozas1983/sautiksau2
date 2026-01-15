@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { useAdminBookings, useUpdateBookingStatus, useAddToBlacklist, useRescheduleBooking, Booking } from '@/hooks/useBookings';
-import { useScheduleExceptions, useDeleteException } from '@/hooks/useScheduleExceptions';
+import { useScheduleExceptions, useDeleteException, ScheduleException } from '@/hooks/useScheduleExceptions';
 import { AdminMonthCalendar } from './AdminMonthCalendar';
 import { BookingDetailDialog } from './BookingDetailDialog';
 import { RescheduleDialog } from './RescheduleDialog';
@@ -23,6 +23,10 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
   const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
   const [blacklistBooking, setBlacklistBooking] = useState<Booking | null>(null);
   const [exceptionDate, setExceptionDate] = useState<Date | null>(null);
+  const [selectedExceptionData, setSelectedExceptionData] = useState<{
+    exception: ScheduleException | null;
+    date: Date | null;
+  }>({ exception: null, date: null });
   
   // Get bookings for current month and adjacent months
   const now = new Date();
@@ -47,7 +51,11 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
   };
   
   const handleDayClick = (date: Date) => {
-    setExceptionDate(date);
+    setSelectedExceptionData({ exception: null, date });
+  };
+  
+  const handleExceptionClick = (exception: ScheduleException, date: Date) => {
+    setSelectedExceptionData({ exception, date });
   };
   
   const handleDeleteException = async (exceptionId: string) => {
@@ -70,9 +78,19 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
       toast.success('Statusas atnaujintas');
       setSelectedBooking(null);
       
-      // If marked as no_show, ask about blacklist
+      // If marked as no_show, automatically add to blacklist
       if (newStatus === 'no_show') {
-        setBlacklistBooking(booking);
+        try {
+          await addToBlacklist.mutateAsync({
+            phone: booking.customerPhone,
+            name: booking.customerName,
+            reason: 'Neatvyko į vizitą',
+            adminPassword,
+          });
+          toast.success('Klientas automatiškai įtrauktas į juodąjį sąrašą');
+        } catch {
+          toast.error('Klaida įtraukiant į juodąjį sąrašą');
+        }
       }
     } catch {
       toast.error('Klaida atnaujinant statusą');
@@ -194,6 +212,7 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
           onBookingClick={handleBookingClick}
           onDayClick={handleDayClick}
           onDeleteException={handleDeleteException}
+          onExceptionClick={handleExceptionClick}
         />
       )}
       
@@ -235,11 +254,12 @@ export function CalendarTab({ adminPassword }: CalendarTabProps) {
       
       {/* Exception dialog */}
       <ExceptionDialog
-        open={!!exceptionDate}
-        onClose={() => setExceptionDate(null)}
-        selectedDate={exceptionDate}
+        open={!!selectedExceptionData.date}
+        onClose={() => setSelectedExceptionData({ exception: null, date: null })}
+        selectedDate={selectedExceptionData.date}
         adminPassword={adminPassword}
         onExceptionCreated={refetchExceptions}
+        existingException={selectedExceptionData.exception}
       />
     </div>
   );
