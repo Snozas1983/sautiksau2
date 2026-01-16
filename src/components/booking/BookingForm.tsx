@@ -36,9 +36,8 @@ export const BookingForm = ({
       newErrors.fullName = 'Prašome įvesti vardą ir pavardę';
     }
     
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Prašome įvesti telefono numerį';
-    } else if (!/^[\d\s+()-]{6,}$/.test(formData.phone)) {
+    // Telefono validacija tik jei įvestas (neprivaloma testavimui)
+    if (formData.phone.trim() && !/^[\d\s+()-]{6,}$/.test(formData.phone)) {
       newErrors.phone = 'Neteisingas telefono formatas';
     }
     
@@ -106,7 +105,8 @@ export const BookingForm = ({
 
           <div className="space-y-2">
             <label htmlFor="phone" className="block text-sm text-booking-muted">
-              Telefonas *
+              Telefonas{' '}
+              <span className="text-booking-muted/50">(neprivaloma)</span>
             </label>
             <input
               type="tel"

@@ -79,14 +79,16 @@ export const BookingSection = () => {
     setIsSubmitting(true);
     
     try {
-      // Check if phone is blacklisted
-      const blacklistResult = await checkBlacklist.mutateAsync(formData.phone);
-      if (blacklistResult.isBlacklisted) {
-        toast.error('Atsiprašome, rezervacija negalima', {
-          description: 'Prašome susisiekti telefonu.',
-        });
-        setIsSubmitting(false);
-        return;
+      // Check if phone is blacklisted (only if phone provided)
+      if (formData.phone.trim()) {
+        const blacklistResult = await checkBlacklist.mutateAsync(formData.phone);
+        if (blacklistResult.isBlacklisted) {
+          toast.error('Atsiprašome, rezervacija negalima', {
+            description: 'Prašome susisiekti telefonu.',
+          });
+          setIsSubmitting(false);
+          return;
+        }
       }
       
       // Create booking
@@ -96,7 +98,7 @@ export const BookingSection = () => {
         date: format(selectedDate, 'yyyy-MM-dd'),
         startTime: selectedTimeSlot.startTime,
         customerName: formData.fullName,
-        customerPhone: formData.phone,
+        customerPhone: formData.phone || 'test-no-phone', // Laikinas placeholder testavimui
         customerEmail: formData.email || undefined,
         promoCode: formData.promoCode || undefined,
       });
