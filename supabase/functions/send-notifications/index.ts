@@ -83,19 +83,60 @@ async function sendEmail(
   resend: InstanceType<typeof Resend>,
   to: string,
   subject: string,
-  html: string
+  html: string,
+  replyTo?: string
 ): Promise<{ success: boolean; error?: string }> {
+  // Primary sender - try sautiksau.lt first
+  const primaryFrom = "SauTikSau <info@sautiksau.lt>";
+  // Fallback sender - Resend's sandbox domain (works without domain verification)
+  const fallbackFrom = "SauTikSau <onboarding@resend.dev>";
+  
   try {
+    // First try with primary sender
     const result = await resend.emails.send({
-      from: "SauTikSau <info@sautiksau.lt>",
+      from: primaryFrom,
       to: [to],
       subject,
       html,
+      reply_to: replyTo,
     });
-    console.log("Email sent:", result);
+    
+    // Resend SDK returns { data, error } - check for error explicitly!
+    if (result.error) {
+      console.error("Email error from primary sender:", result.error);
+      
+      // If 403 (not authorized), try fallback sender
+      const errorAny = result.error as any;
+      if (errorAny.statusCode === 403 || result.error.message?.includes('Not authorized')) {
+        console.log("Trying fallback sender (resend.dev)...");
+        
+        const fallbackResult = await resend.emails.send({
+          from: fallbackFrom,
+          to: [to],
+          subject,
+          html,
+          reply_to: "info@sautiksau.lt", // Reply-to real address
+        });
+        
+        if (fallbackResult.error) {
+          console.error("Fallback email also failed:", fallbackResult.error);
+          return { 
+            success: false, 
+            error: `Primary: ${result.error.message}, Fallback: ${fallbackResult.error.message}` 
+          };
+        }
+        
+        console.log("Email sent via fallback:", fallbackResult.data);
+        return { success: true };
+      }
+      
+      return { success: false, error: result.error.message };
+    }
+    
+    console.log("Email sent successfully:", result.data);
     return { success: true };
   } catch (error) {
-    console.error("Email error:", error);
+    console.error("Email exception:", error);
     return { success: false, error: String(error) };
   }
 }
