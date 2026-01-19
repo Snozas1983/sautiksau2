@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, Loader2 } from 'lucide-react';
+import { Save, Loader2, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,6 +19,9 @@ interface SettingsData {
   booking_days_ahead: string;
   deposit_amount: string;
   cancel_hours_before: string;
+  max_bookings_per_phone: string;
+  max_bookings_per_email: string;
+  email_logo_url: string;
 }
 
 export function SettingsTab({ adminPassword }: SettingsTabProps) {
@@ -42,6 +45,9 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
         booking_days_ahead: settings['booking_days_ahead'] || '60',
         deposit_amount: settings['deposit_amount'] || '10',
         cancel_hours_before: settings['cancel_hours_before'] || '24',
+        max_bookings_per_phone: settings['max_bookings_per_phone'] || '4',
+        max_bookings_per_email: settings['max_bookings_per_email'] || '4',
+        email_logo_url: settings['email_logo_url'] || '',
       });
     }
   }, [settings]);
@@ -144,6 +150,64 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
               value={formData.cancel_hours_before || ''}
               onChange={(e) => setFormData({ ...formData, cancel_hours_before: e.target.value })}
             />
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Anti-abuse Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Shield className="w-4 h-4" />
+            Apsauga nuo piktnaudžiavimo
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Maks. aktyvių rezervacijų su vienu tel. nr.</Label>
+            <Input
+              type="number"
+              min="1"
+              value={formData.max_bookings_per_phone || ''}
+              onChange={(e) => setFormData({ ...formData, max_bookings_per_phone: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Riboja kiek neįvykusių rezervacijų gali turėti vienas telefono numeris
+            </p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Maks. aktyvių rezervacijų su vienu el. paštu</Label>
+            <Input
+              type="number"
+              min="1"
+              value={formData.max_bookings_per_email || ''}
+              onChange={(e) => setFormData({ ...formData, max_bookings_per_email: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Riboja kiek neįvykusių rezervacijų gali turėti vienas el. paštas
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Email Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">El. pašto nustatymai</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Logotipo URL el. laiškuose</Label>
+            <Input
+              type="url"
+              placeholder="https://example.com/logo.png"
+              value={formData.email_logo_url || ''}
+              onChange={(e) => setFormData({ ...formData, email_logo_url: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Įkelkite logotipą į kokią nors talpyklą ir įklijuokite nuorodą čia
+            </p>
           </div>
         </CardContent>
       </Card>

@@ -15,9 +15,10 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface CalendarTabProps {
   adminPassword: string;
+  bookingIdFromUrl?: string | null;
 }
 
-export function CalendarTab({ adminPassword }: CalendarTabProps) {
+export function CalendarTab({ adminPassword, bookingIdFromUrl }: CalendarTabProps) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [rescheduleBooking, setRescheduleBooking] = useState<Booking | null>(null);
