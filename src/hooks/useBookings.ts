@@ -9,7 +9,7 @@ export interface Booking {
   date: string;
   startTime: string;
   endTime: string;
-  status: 'confirmed' | 'no_show' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'no_show' | 'cancelled';
   customerName: string;
   customerPhone: string;
   customerEmail?: string;

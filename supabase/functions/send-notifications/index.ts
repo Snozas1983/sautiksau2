@@ -11,8 +11,12 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+// Rate limit delay - Resend allows max 2 requests per second
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const EMAIL_DELAY_MS = 2000; // 2 seconds between emails
+
 interface NotificationRequest {
-  type?: 'booking' | 'cancellation' | 'blacklist_warning'; // Default: 'booking'
+  type?: 'booking' | 'cancellation' | 'reschedule' | 'blacklist_warning' | 'pending_approval';
   bookingId: string;
   manageToken?: string;
   serviceName: string;
@@ -23,7 +27,7 @@ interface NotificationRequest {
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
-  // For cancellation - which notifications to send
+  // For cancellation/reschedule - which notifications to send
   sendSms?: boolean;
   sendEmail?: boolean;
   // For blacklist warning
@@ -52,6 +56,12 @@ function replaceTemplatePlaceholders(template: string, data: Record<string, stri
   for (const [key, value] of Object.entries(data)) {
     result = result.replace(new RegExp(`{{${key}}}`, 'g'), value || '');
   }
+  // Handle conditional logo: {{#if logo_url}}...{{/if}}
+  if (data.logo_url) {
+    result = result.replace(/{{#if logo_url}}([\s\S]*?){{\/if}}/g, '$1');
+  } else {
+    result = result.replace(/{{#if logo_url}}[\s\S]*?{{\/if}}/g, '');
+  }
   return result;
 }
 
@@ -78,6 +88,25 @@ async function getTemplates(): Promise<Record<string, { subject: string | null; 
   return templates;
 }
 
+// Get settings from database
+async function getSettings(): Promise<Record<string, string>> {
+  const { data, error } = await supabaseAdmin
+    .from('settings')
+    .select('key, value');
+  
+  if (error) {
+    console.error('Error fetching settings:', error);
+    return {};
+  }
+  
+  const settings: Record<string, string> = {};
+  for (const row of data || []) {
+    settings[row.key] = row.value;
+  }
+  
+  return settings;
+}
+
 // Send email using Resend
 async function sendEmail(
   resend: InstanceType<typeof Resend>,
@@ -86,13 +115,10 @@ async function sendEmail(
   html: string,
   replyTo?: string
 ): Promise<{ success: boolean; error?: string }> {
-  // Primary sender - try sautiksau.lt first
   const primaryFrom = "SauTikSau <info@sautiksau.lt>";
-  // Fallback sender - Resend's sandbox domain (works without domain verification)
   const fallbackFrom = "SauTikSau <onboarding@resend.dev>";
   
   try {
-    // First try with primary sender
     const result = await resend.emails.send({
       from: primaryFrom,
       to: [to],
@@ -101,11 +127,9 @@ async function sendEmail(
       reply_to: replyTo,
     });
     
-    // Resend SDK returns { data, error } - check for error explicitly!
     if (result.error) {
       console.error("Email error from primary sender:", result.error);
       
-      // If 403 (not authorized), try fallback sender
       const errorAny = result.error as any;
       if (errorAny.statusCode === 403 || result.error.message?.includes('Not authorized')) {
         console.log("Trying fallback sender (resend.dev)...");
@@ -115,7 +139,7 @@ async function sendEmail(
           to: [to],
           subject,
           html,
-          reply_to: "info@sautiksau.lt", // Reply-to real address
+          reply_to: "info@sautiksau.lt",
         });
         
         if (fallbackResult.error) {
@@ -213,8 +237,14 @@ const handler = async (req: Request): Promise<Response> => {
     
     console.log(`Sending ${notificationType} notifications for booking:`, data);
 
-    // Get templates from database
-    const templates = await getTemplates();
+    // Get templates and settings from database
+    const [templates, settings] = await Promise.all([
+      getTemplates(),
+      getSettings(),
+    ]);
+    
+    // Get logo URL from settings
+    const logoUrl = settings['email_logo_url'] || '';
     
     // Prepare template data
     const formattedDate = formatDate(data.date);
@@ -222,6 +252,7 @@ const handler = async (req: Request): Promise<Response> => {
       ? `https://sau-tik-sau-zen.lovable.app/booking/${data.manageToken}`
       : 'https://sau-tik-sau-zen.lovable.app';
     const bookingLink = 'https://sau-tik-sau-zen.lovable.app';
+    const adminLink = `https://sau-tik-sau-zen.lovable.app/admin/dashboard?booking=${data.bookingId}`;
     
     const templateData: Record<string, string> = {
       customer_name: data.customerName,
@@ -235,6 +266,8 @@ const handler = async (req: Request): Promise<Response> => {
       booking_id: data.bookingId,
       manage_link: manageLink,
       booking_link: bookingLink,
+      admin_link: adminLink,
+      logo_url: logoUrl,
     };
 
     const results: { adminEmail?: any; customerEmail?: any; customerSMS?: any } = {};
@@ -254,6 +287,8 @@ const handler = async (req: Request): Promise<Response> => {
           adminSubject,
           adminBody
         );
+        
+        await delay(EMAIL_DELAY_MS); // Rate limit delay
       }
 
       // 2. Send email to customer (if email provided)
@@ -274,14 +309,13 @@ const handler = async (req: Request): Promise<Response> => {
 
       // 3. Send SMS to customer
       const smsTemplate = templates['sms_customer'];
-      if (smsTemplate?.is_active) {
+      if (smsTemplate?.is_active && data.customerPhone) {
         const smsBody = replaceTemplatePlaceholders(smsTemplate.body, templateData);
         results.customerSMS = await sendSMS(data.customerPhone, smsBody);
       }
       
     } else if (notificationType === 'cancellation') {
       // ===== CANCELLATION NOTIFICATIONS =====
-      // Only send to customer, based on sendSms/sendEmail flags
       
       // 1. Send cancellation email to customer
       if (data.sendEmail && data.customerEmail) {
@@ -296,17 +330,126 @@ const handler = async (req: Request): Promise<Response> => {
             subject,
             body
           );
+          
+          await delay(EMAIL_DELAY_MS); // Rate limit delay
         }
       }
 
       // 2. Send cancellation SMS to customer
-      if (data.sendSms) {
+      if (data.sendSms && data.customerPhone) {
         const cancelSmsTemplate = templates['sms_cancel_customer'];
         if (cancelSmsTemplate?.is_active) {
           const smsBody = replaceTemplatePlaceholders(cancelSmsTemplate.body, templateData);
           results.customerSMS = await sendSMS(data.customerPhone, smsBody);
         }
       }
+      
+      // 3. Send cancellation email to admin
+      const adminCancelTemplate = templates['email_cancel_admin'];
+      if (adminCancelTemplate?.is_active) {
+        const adminSubject = replaceTemplatePlaceholders(adminCancelTemplate.subject || '', templateData);
+        const adminBody = replaceTemplatePlaceholders(adminCancelTemplate.body, templateData);
+        
+        results.adminEmail = await sendEmail(
+          resend,
+          "info@sautiksau.lt",
+          adminSubject,
+          adminBody
+        );
+      }
+      
+    } else if (notificationType === 'reschedule') {
+      // ===== RESCHEDULE NOTIFICATIONS =====
+      
+      // 1. Send reschedule email to customer
+      if (data.customerEmail) {
+        const rescheduleEmailTemplate = templates['email_reschedule_customer'];
+        if (rescheduleEmailTemplate?.is_active) {
+          const subject = replaceTemplatePlaceholders(rescheduleEmailTemplate.subject || '', templateData);
+          const body = replaceTemplatePlaceholders(rescheduleEmailTemplate.body, templateData);
+          
+          results.customerEmail = await sendEmail(
+            resend,
+            data.customerEmail,
+            subject,
+            body
+          );
+          
+          await delay(EMAIL_DELAY_MS); // Rate limit delay
+        }
+      }
+
+      // 2. Send reschedule SMS to customer
+      if (data.customerPhone) {
+        const rescheduleSmsTemplate = templates['sms_reschedule_customer'];
+        if (rescheduleSmsTemplate?.is_active) {
+          const smsBody = replaceTemplatePlaceholders(rescheduleSmsTemplate.body, templateData);
+          results.customerSMS = await sendSMS(data.customerPhone, smsBody);
+        }
+      }
+      
+      // 3. Send reschedule email to admin
+      const adminRescheduleTemplate = templates['email_reschedule_admin'];
+      if (adminRescheduleTemplate?.is_active) {
+        const adminSubject = replaceTemplatePlaceholders(adminRescheduleTemplate.subject || '', templateData);
+        const adminBody = replaceTemplatePlaceholders(adminRescheduleTemplate.body, templateData);
+        
+        results.adminEmail = await sendEmail(
+          resend,
+          "info@sautiksau.lt",
+          adminSubject,
+          adminBody
+        );
+      }
+      
+    } else if (notificationType === 'pending_approval') {
+      // ===== PENDING APPROVAL NOTIFICATIONS (for blacklisted clients) =====
+      const pendingTemplateData = {
+        ...templateData,
+        blacklist_reason: data.blacklistReason || 'Neatvyko',
+      };
+      
+      // 1. Send pending email to customer
+      if (data.customerEmail) {
+        const pendingEmailTemplate = templates['email_pending_customer'];
+        if (pendingEmailTemplate?.is_active) {
+          const subject = replaceTemplatePlaceholders(pendingEmailTemplate.subject || '', pendingTemplateData);
+          const body = replaceTemplatePlaceholders(pendingEmailTemplate.body, pendingTemplateData);
+          
+          results.customerEmail = await sendEmail(
+            resend,
+            data.customerEmail,
+            subject,
+            body
+          );
+          
+          await delay(EMAIL_DELAY_MS); // Rate limit delay
+        }
+      }
+
+      // 2. Send pending SMS to customer
+      if (data.customerPhone) {
+        const pendingSmsTemplate = templates['sms_pending_customer'];
+        if (pendingSmsTemplate?.is_active) {
+          const smsBody = replaceTemplatePlaceholders(pendingSmsTemplate.body, pendingTemplateData);
+          results.customerSMS = await sendSMS(data.customerPhone, smsBody);
+        }
+      }
+      
+      // 3. Send pending approval email to admin
+      const adminPendingTemplate = templates['email_pending_admin'];
+      if (adminPendingTemplate?.is_active) {
+        const adminSubject = replaceTemplatePlaceholders(adminPendingTemplate.subject || '', pendingTemplateData);
+        const adminBody = replaceTemplatePlaceholders(adminPendingTemplate.body, pendingTemplateData);
+        
+        results.adminEmail = await sendEmail(
+          resend,
+          "info@sautiksau.lt",
+          adminSubject,
+          adminBody
+        );
+      }
+      
     } else if (notificationType === 'blacklist_warning') {
       // ===== BLACKLIST WARNING TO ADMIN =====
       const blacklistTemplateData = {

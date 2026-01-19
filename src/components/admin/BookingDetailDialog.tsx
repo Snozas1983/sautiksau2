@@ -1,6 +1,6 @@
 import { format, parseISO } from 'date-fns';
 import { lt } from 'date-fns/locale';
-import { Calendar, Clock, User, Phone, Mail, Scissors } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Mail, Scissors, AlertTriangle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Booking } from '@/hooks/useBookings';
 
 interface BookingDetailDialogProps {
@@ -27,12 +28,14 @@ interface BookingDetailDialogProps {
 }
 
 const STATUS_OPTIONS = [
+  { value: 'pending', label: 'Laukia patvirtinimo' },
   { value: 'confirmed', label: 'Patvirtinta' },
   { value: 'no_show', label: 'Neatvyko' },
   { value: 'cancelled', label: 'Atšaukta' },
 ];
 
 const STATUS_COLORS: Record<string, string> = {
+  pending: 'text-yellow-600',
   confirmed: 'text-green-600',
   cancelled: 'text-red-600',
   no_show: 'text-gray-600',
@@ -50,6 +53,7 @@ export function BookingDetailDialog({
 
   const formattedDate = format(parseISO(booking.date), 'EEEE, MMMM d', { locale: lt });
   const isCancellable = booking.status !== 'cancelled' && booking.status !== 'no_show';
+  const isPending = booking.status === 'pending';
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -59,6 +63,17 @@ export function BookingDetailDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Pending approval warning */}
+          {isPending && (
+            <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium text-yellow-800">Reikalingas patvirtinimas</p>
+                <p className="text-yellow-700">Šis klientas yra juodajame sąraše. Patvirtinkite arba atmeskite rezervaciją.</p>
+              </div>
+            </div>
+          )}
+
           {/* Date and time */}
           <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
             <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
@@ -76,6 +91,9 @@ export function BookingDetailDialog({
             <div className="flex items-center gap-2">
               <User className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium">{booking.customerName}</span>
+              {booking.isBlacklisted && (
+                <Badge variant="destructive" className="text-xs">Juodas sąrašas</Badge>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 text-muted-foreground" />
@@ -121,22 +139,43 @@ export function BookingDetailDialog({
 
           {/* Actions */}
           <div className="flex gap-2 pt-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => onReschedule(booking)}
-              disabled={!isCancellable}
-            >
-              Perkelti
-            </Button>
-            <Button
-              variant="destructive"
-              className="flex-1"
-              onClick={() => onCancel(booking)}
-              disabled={!isCancellable}
-            >
-              Atšaukti
-            </Button>
+            {isPending ? (
+              <>
+                <Button
+                  variant="default"
+                  className="flex-1 bg-green-600 hover:bg-green-700"
+                  onClick={() => onStatusChange(booking, 'confirmed')}
+                >
+                  Patvirtinti
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={() => onCancel(booking)}
+                >
+                  Atmesti
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => onReschedule(booking)}
+                  disabled={!isCancellable}
+                >
+                  Perkelti
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  onClick={() => onCancel(booking)}
+                  disabled={!isCancellable}
+                >
+                  Atšaukti
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </DialogContent>

@@ -1,17 +1,22 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Calendar, Settings, LogOut, List, Home, Bell } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Calendar, Settings, LogOut, List, Home, Bell, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { CalendarTab } from '@/components/admin/CalendarTab';
 import { SettingsTab } from '@/components/admin/SettingsTab';
 import { ServicesTab } from '@/components/admin/ServicesTab';
 import { NotificationTemplatesTab } from '@/components/admin/NotificationTemplatesTab';
+import { ClientsTab } from '@/components/admin/ClientsTab';
 
-type Tab = 'calendar' | 'services' | 'settings' | 'notifications';
+type Tab = 'calendar' | 'services' | 'settings' | 'notifications' | 'clients';
 
 const AdminDashboard = () => {
-  const [activeTab, setActiveTab] = useState<Tab>('services');
+  const [searchParams] = useSearchParams();
+  const bookingIdFromUrl = searchParams.get('booking');
+  
+  // If there's a booking ID in URL, default to calendar tab
+  const [activeTab, setActiveTab] = useState<Tab>(bookingIdFromUrl ? 'calendar' : 'services');
   const { isAuthenticated, isLoading, logout, getPassword } = useAdminAuth();
   const navigate = useNavigate();
   
@@ -58,13 +63,16 @@ const AdminDashboard = () => {
       {/* Content */}
       <main className="flex-1 overflow-auto pb-20">
         {activeTab === 'calendar' && adminPassword && (
-          <CalendarTab adminPassword={adminPassword} />
+          <CalendarTab adminPassword={adminPassword} bookingIdFromUrl={bookingIdFromUrl} />
         )}
         {activeTab === 'services' && adminPassword && (
           <ServicesTab adminPassword={adminPassword} />
         )}
         {activeTab === 'notifications' && adminPassword && (
           <NotificationTemplatesTab adminPassword={adminPassword} />
+        )}
+        {activeTab === 'clients' && adminPassword && (
+          <ClientsTab adminPassword={adminPassword} />
         )}
         {activeTab === 'settings' && adminPassword && (
           <SettingsTab adminPassword={adminPassword} />
@@ -88,6 +96,14 @@ const AdminDashboard = () => {
         >
           <List className="w-5 h-5" />
           <span className="text-[10px]">Paslaugos</span>
+        </Button>
+        <Button
+          variant={activeTab === 'clients' ? 'secondary' : 'ghost'}
+          className="flex-1 flex flex-col items-center gap-1 h-auto py-2 px-1"
+          onClick={() => setActiveTab('clients')}
+        >
+          <Users className="w-5 h-5" />
+          <span className="text-[10px]">Klientai</span>
         </Button>
         <Button
           variant={activeTab === 'notifications' ? 'secondary' : 'ghost'}
