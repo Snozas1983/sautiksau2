@@ -3,7 +3,7 @@ import { format } from 'date-fns';
 import { TimeSlot, BookingStep, CustomerFormData } from './types';
 import { useServices, Service } from '@/hooks/useServices';
 import { useCalendarAvailability } from '@/hooks/useCalendarAvailability';
-import { useCreateBooking, useCheckBlacklist } from '@/hooks/useBookings';
+import { useCreateBooking } from '@/hooks/useBookings';
 
 import { BookingCalendar } from './BookingCalendar';
 import { TreatwellButton } from './TreatwellButton';
@@ -21,7 +21,6 @@ export const BookingSection = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const createBooking = useCreateBooking();
-  const checkBlacklist = useCheckBlacklist();
   // Get real availability based on selected service
   const { data: availabilityData, isLoading: isLoadingAvailability } = useCalendarAvailability(
     selectedService?.duration || null
@@ -79,19 +78,7 @@ export const BookingSection = () => {
     setIsSubmitting(true);
     
     try {
-      // Check if phone is blacklisted (only if phone provided)
-      if (formData.phone.trim()) {
-        const blacklistResult = await checkBlacklist.mutateAsync(formData.phone);
-        if (blacklistResult.isBlacklisted) {
-          toast.error('Atsiprašome, rezervacija negalima', {
-            description: 'Prašome susisiekti telefonu.',
-          });
-          setIsSubmitting(false);
-          return;
-        }
-      }
-      
-      // Create booking
+      // Create booking - server handles blacklist check and sets pending/confirmed status
       await createBooking.mutateAsync({
         serviceId: selectedService.id,
         serviceDuration: selectedService.duration,
