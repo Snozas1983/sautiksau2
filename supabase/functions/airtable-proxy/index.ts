@@ -350,6 +350,12 @@ serve(async (req) => {
         bookingDaysAhead: parseInt(settings['booking_days_ahead'] || '60'),
         depositAmount: parseFloat(settings['deposit_amount'] || '10'),
         cancelHoursBefore: parseInt(settings['cancel_hours_before'] || '24'),
+        // Contact information
+        contactName: settings['contact_name'] || '',
+        contactPhone: settings['contact_phone'] || '+37062082478',
+        contactEmail: settings['contact_email'] || 'info@sautiksau.lt',
+        contactFacebook: settings['contact_facebook'] || 'https://www.facebook.com/sautiksau',
+        contactInstagram: settings['contact_instagram'] || 'https://www.instagram.com/sautiksaumasazas/',
       };
       
       return new Response(JSON.stringify({ settings: publicSettings }), {
@@ -408,19 +414,38 @@ serve(async (req) => {
         customerName: body.customerName,
       });
       
-      // Check if client is blacklisted
+      // Check if client is blacklisted (by phone OR email)
       let isBlacklisted = false;
       let blacklistReason = '';
-      const { data: clientData } = await supabaseAdmin
-        .from('clients')
-        .select('is_blacklisted, blacklist_reason')
-        .eq('phone', body.customerPhone)
-        .single();
       
-      if (clientData?.is_blacklisted) {
-        isBlacklisted = true;
-        blacklistReason = clientData.blacklist_reason || 'Neatvyko';
-        console.log('BLACKLISTED CLIENT booking:', body.customerPhone);
+      // Check by phone
+      if (body.customerPhone) {
+        const { data: clientByPhone } = await supabaseAdmin
+          .from('clients')
+          .select('is_blacklisted, blacklist_reason')
+          .eq('phone', body.customerPhone)
+          .maybeSingle();
+        
+        if (clientByPhone?.is_blacklisted) {
+          isBlacklisted = true;
+          blacklistReason = clientByPhone.blacklist_reason || 'Neatvyko';
+          console.log('BLACKLISTED CLIENT (by phone):', body.customerPhone);
+        }
+      }
+      
+      // Check by email (if not already blacklisted)
+      if (!isBlacklisted && body.customerEmail) {
+        const { data: clientByEmail } = await supabaseAdmin
+          .from('clients')
+          .select('is_blacklisted, blacklist_reason')
+          .eq('email', body.customerEmail)
+          .maybeSingle();
+        
+        if (clientByEmail?.is_blacklisted) {
+          isBlacklisted = true;
+          blacklistReason = clientByEmail.blacklist_reason || 'Neatvyko';
+          console.log('BLACKLISTED CLIENT (by email):', body.customerEmail);
+        }
       }
       
       // Get service details
@@ -446,7 +471,36 @@ serve(async (req) => {
       const endMinutes = startMinutes + service.duration;
       const endTime = minutesToTime(endMinutes);
       
-      // Insert booking into Supabase
+      // Upsert client record with phone AND email
+      if (body.customerPhone) {
+        const { data: existingClient } = await supabaseAdmin
+          .from('clients')
+          .select('id, email')
+          .eq('phone', body.customerPhone)
+          .maybeSingle();
+        
+        if (existingClient) {
+          // Update existing client with email if provided
+          await supabaseAdmin
+            .from('clients')
+            .update({ 
+              name: body.customerName,
+              email: body.customerEmail || existingClient.email,
+            })
+            .eq('id', existingClient.id);
+        } else {
+          // Create new client
+          await supabaseAdmin
+            .from('clients')
+            .insert({
+              phone: body.customerPhone,
+              email: body.customerEmail || null,
+              name: body.customerName,
+            });
+        }
+      }
+      
+      // Insert booking into Supabase - PENDING if blacklisted, CONFIRMED otherwise
       const { data: newBooking, error: insertError } = await supabaseAdmin
         .from('bookings')
         .insert({
@@ -458,7 +512,7 @@ serve(async (req) => {
           customer_phone: body.customerPhone,
           customer_email: body.customerEmail || null,
           promo_code: body.promoCode || null,
-          status: 'confirmed',
+          status: isBlacklisted ? 'pending' : 'confirmed',
         })
         .select()
         .single();
@@ -468,32 +522,11 @@ serve(async (req) => {
         throw insertError;
       }
       
-      console.log('Booking created:', newBooking.id);
+      console.log('Booking created:', newBooking.id, 'status:', newBooking.status);
 
-      // Send notifications asynchronously with manage_token
-      fetch(`${SUPABASE_URL}/functions/v1/send-notifications`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-        },
-        body: JSON.stringify({
-          bookingId: newBooking.id,
-          manageToken: newBooking.manage_token,
-          serviceName: service.name,
-          date: body.date,
-          startTime: body.startTime,
-          endTime: endTime,
-          customerName: body.customerName,
-          customerPhone: body.customerPhone,
-          customerEmail: body.customerEmail,
-        }),
-      })
-        .then(res => console.log('send-notifications response status:', res.status))
-        .catch(err => console.error('Failed to send notifications:', err));
-      
-      // If blacklisted, send admin warning email
+      // Send notifications based on blacklist status
       if (isBlacklisted) {
+        // Send PENDING APPROVAL notification (instead of normal booking notification)
         fetch(`${SUPABASE_URL}/functions/v1/send-notifications`, {
           method: 'POST',
           headers: {
@@ -501,19 +534,43 @@ serve(async (req) => {
             'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
           },
           body: JSON.stringify({
-            type: 'blacklist_warning',
+            type: 'pending_approval',
             bookingId: newBooking.id,
+            manageToken: newBooking.manage_token,
             serviceName: service.name,
             date: body.date,
             startTime: body.startTime,
             endTime: endTime,
             customerName: body.customerName,
             customerPhone: body.customerPhone,
+            customerEmail: body.customerEmail,
             blacklistReason: blacklistReason,
           }),
         })
-          .then(res => console.log('blacklist-warning notification status:', res.status))
-          .catch(err => console.error('Failed to send blacklist warning:', err));
+          .then(res => console.log('pending_approval notification status:', res.status))
+          .catch(err => console.error('Failed to send pending_approval notification:', err));
+      } else {
+        // Send normal booking notification
+        fetch(`${SUPABASE_URL}/functions/v1/send-notifications`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({
+            bookingId: newBooking.id,
+            manageToken: newBooking.manage_token,
+            serviceName: service.name,
+            date: body.date,
+            startTime: body.startTime,
+            endTime: endTime,
+            customerName: body.customerName,
+            customerPhone: body.customerPhone,
+            customerEmail: body.customerEmail,
+          }),
+        })
+          .then(res => console.log('send-notifications response status:', res.status))
+          .catch(err => console.error('Failed to send notifications:', err));
       }
       
       return new Response(JSON.stringify({ success: true, booking: newBooking }), {
@@ -894,7 +951,7 @@ serve(async (req) => {
       }
       
       if (search) {
-        query = query.or(`phone.ilike.%${search}%,name.ilike.%${search}%`);
+        query = query.or(`phone.ilike.%${search}%,name.ilike.%${search}%,email.ilike.%${search}%`);
       }
       
       const { data, error } = await query.order('updated_at', { ascending: false });
@@ -920,6 +977,7 @@ serve(async (req) => {
       const clients = (data || []).map((record: any) => ({
         id: record.id,
         phone: record.phone,
+        email: record.email,
         name: record.name,
         isBlacklisted: record.is_blacklisted,
         blacklistReason: record.blacklist_reason,

@@ -4,6 +4,7 @@ import { airtableApi } from '@/lib/airtable';
 export interface Client {
   id: string;
   phone: string;
+  email: string | null;
   name: string | null;
   isBlacklisted: boolean;
   blacklistReason: string | null;

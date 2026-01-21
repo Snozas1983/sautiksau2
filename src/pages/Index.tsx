@@ -3,8 +3,28 @@ import logo from "@/assets/logo.png";
 import heroBg from "@/assets/hero-bg.png";
 import { BookingSection } from "@/components/booking/BookingSection";
 import { AdminQuickPanel } from "@/components/admin/AdminQuickPanel";
+import { usePublicSettings } from "@/hooks/usePublicSettings";
 
 const Index = () => {
+  const { data: settings } = usePublicSettings();
+  
+  // Format phone for display (add spaces)
+  const formatPhoneDisplay = (phone: string) => {
+    if (!phone) return '+370 620 82478';
+    // Remove all non-digits except +
+    const cleaned = phone.replace(/[^\d+]/g, '');
+    // Format: +370 620 82478
+    if (cleaned.startsWith('+370') && cleaned.length === 12) {
+      return `${cleaned.slice(0, 4)} ${cleaned.slice(4, 7)} ${cleaned.slice(7)}`;
+    }
+    return phone;
+  };
+  
+  const contactPhone = settings?.contactPhone || '+37062082478';
+  const contactPhoneDisplay = formatPhoneDisplay(contactPhone);
+  const contactFacebook = settings?.contactFacebook || 'https://www.facebook.com/sautiksau';
+  const contactInstagram = settings?.contactInstagram || 'https://www.instagram.com/sautiksaumasazas/';
+  
   return <div className="min-h-screen">
       {/* Admin Quick Panel (visible only with ?admin=1) */}
       <AdminQuickPanel />
@@ -28,9 +48,9 @@ const Index = () => {
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-8">
-            <a href="tel:+37062082478" className="flex items-center gap-2 text-foreground hover:text-muted-foreground transition-colors">
+            <a href={`tel:${contactPhone}`} className="flex items-center gap-2 text-foreground hover:text-muted-foreground transition-colors">
               <Phone size={18} />
-              <span className="font-light">+370 620 82478</span>
+              <span className="font-light">{contactPhoneDisplay}</span>
             </a>
             <div className="hidden sm:block h-4 w-px bg-border" />
             <div className="flex items-center gap-2 text-muted-foreground">
@@ -103,8 +123,8 @@ const Index = () => {
               <p className="text-sm tracking-[0.2em] text-muted-foreground uppercase">
                 Telefonas
               </p>
-              <a href="tel:+37062082478" className="text-2xl font-light hover:text-muted-foreground transition-colors">
-                +370 620 82478
+              <a href={`tel:${contactPhone}`} className="text-2xl font-light hover:text-muted-foreground transition-colors">
+                {contactPhoneDisplay}
               </a>
             </div>
             
@@ -126,12 +146,16 @@ const Index = () => {
                 Socialiniai tinklai
               </p>
               <div className="flex justify-center gap-6">
-                <a href="https://www.facebook.com/sautiksau" className="text-lg font-light hover:text-muted-foreground transition-colors" target="_blank" rel="noopener noreferrer">
-                  Facebook
-                </a>
-                <a href="https://www.instagram.com/sautiksaumasazas/#" className="text-lg font-light hover:text-muted-foreground transition-colors" target="_blank" rel="noopener noreferrer">
-                  Instagram
-                </a>
+                {contactFacebook && (
+                  <a href={contactFacebook} className="text-lg font-light hover:text-muted-foreground transition-colors" target="_blank" rel="noopener noreferrer">
+                    Facebook
+                  </a>
+                )}
+                {contactInstagram && (
+                  <a href={contactInstagram} className="text-lg font-light hover:text-muted-foreground transition-colors" target="_blank" rel="noopener noreferrer">
+                    Instagram
+                  </a>
+                )}
               </div>
             </div>
           </div>

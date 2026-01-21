@@ -119,6 +119,11 @@ export function ClientsTab({ adminPassword }: ClientsTabProps) {
                         {client.phone}
                       </a>
                     </div>
+                    {client.email && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        {client.email}
+                      </div>
+                    )}
                     {client.noShowCount > 0 && (
                       <div className="text-xs text-orange-600 mt-1">
                         Neatvykimų: {client.noShowCount}

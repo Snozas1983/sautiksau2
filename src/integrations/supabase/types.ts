@@ -108,6 +108,7 @@ export type Database = {
         Row: {
           blacklist_reason: string | null
           created_at: string
+          email: string | null
           id: string
           is_blacklisted: boolean
           name: string | null
@@ -118,6 +119,7 @@ export type Database = {
         Insert: {
           blacklist_reason?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           is_blacklisted?: boolean
           name?: string | null
@@ -128,6 +130,7 @@ export type Database = {
         Update: {
           blacklist_reason?: string | null
           created_at?: string
+          email?: string | null
           id?: string
           is_blacklisted?: boolean
           name?: string | null

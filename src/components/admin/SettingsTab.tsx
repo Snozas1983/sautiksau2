@@ -22,6 +22,12 @@ interface SettingsData {
   max_bookings_per_phone: string;
   max_bookings_per_email: string;
   email_logo_url: string;
+  // Contact information
+  contact_name: string;
+  contact_phone: string;
+  contact_email: string;
+  contact_facebook: string;
+  contact_instagram: string;
 }
 
 export function SettingsTab({ adminPassword }: SettingsTabProps) {
@@ -48,6 +54,12 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
         max_bookings_per_phone: settings['max_bookings_per_phone'] || '4',
         max_bookings_per_email: settings['max_bookings_per_email'] || '4',
         email_logo_url: settings['email_logo_url'] || '',
+        // Contact information
+        contact_name: settings['contact_name'] || '',
+        contact_phone: settings['contact_phone'] || '+37062082478',
+        contact_email: settings['contact_email'] || 'info@sautiksau.lt',
+        contact_facebook: settings['contact_facebook'] || 'https://www.facebook.com/sautiksau',
+        contact_instagram: settings['contact_instagram'] || 'https://www.instagram.com/sautiksaumasazas/',
       });
     }
   }, [settings]);
@@ -208,6 +220,62 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
             <p className="text-xs text-muted-foreground">
               Įkelkite logotipą į kokią nors talpyklą ir įklijuokite nuorodą čia
             </p>
+          </div>
+        </CardContent>
+      </Card>
+      
+      {/* Contact Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Kontaktinė informacija</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label>Vardas Pavardė (neprivaloma)</Label>
+            <Input
+              placeholder="Vardenis Pavardenis"
+              value={formData.contact_name || ''}
+              onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Telefonas</Label>
+            <Input
+              type="tel"
+              placeholder="+37062082478"
+              value={formData.contact_phone || ''}
+              onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">
+              Šis telefonas bus rodomas svetainėje ir el. laiškuose
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label>El. paštas</Label>
+            <Input
+              type="email"
+              placeholder="info@sautiksau.lt"
+              value={formData.contact_email || ''}
+              onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Facebook</Label>
+            <Input
+              type="url"
+              placeholder="https://www.facebook.com/sautiksau"
+              value={formData.contact_facebook || ''}
+              onChange={(e) => setFormData({ ...formData, contact_facebook: e.target.value })}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Instagram</Label>
+            <Input
+              type="url"
+              placeholder="https://www.instagram.com/sautiksaumasazas/"
+              value={formData.contact_instagram || ''}
+              onChange={(e) => setFormData({ ...formData, contact_instagram: e.target.value })}
+            />
           </div>
         </CardContent>
       </Card>

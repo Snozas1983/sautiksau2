@@ -243,8 +243,9 @@ const handler = async (req: Request): Promise<Response> => {
       getSettings(),
     ]);
     
-    // Get logo URL from settings
+    // Get logo URL and contact phone from settings
     const logoUrl = settings['email_logo_url'] || '';
+    const contactPhone = settings['contact_phone'] || '+37062082478';
     
     // Prepare template data
     const formattedDate = formatDate(data.date);
@@ -268,6 +269,7 @@ const handler = async (req: Request): Promise<Response> => {
       booking_link: bookingLink,
       admin_link: adminLink,
       logo_url: logoUrl,
+      contact_phone: contactPhone,
     };
 
     const results: { adminEmail?: any; customerEmail?: any; customerSMS?: any } = {};
