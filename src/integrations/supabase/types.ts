@@ -49,13 +49,16 @@ export type Database = {
           customer_phone: string
           date: string | null
           end_time: string | null
+          google_calendar_event_id: string | null
           id: string
+          is_system_booking: boolean
           manage_token: string | null
           promo_code: string | null
           service_id: string
           slot_id: string | null
           start_time: string | null
           status: string
+          system_action_day: number | null
         }
         Insert: {
           created_at?: string
@@ -64,13 +67,16 @@ export type Database = {
           customer_phone: string
           date?: string | null
           end_time?: string | null
+          google_calendar_event_id?: string | null
           id?: string
+          is_system_booking?: boolean
           manage_token?: string | null
           promo_code?: string | null
           service_id: string
           slot_id?: string | null
           start_time?: string | null
           status?: string
+          system_action_day?: number | null
         }
         Update: {
           created_at?: string
@@ -79,13 +85,16 @@ export type Database = {
           customer_phone?: string
           date?: string | null
           end_time?: string | null
+          google_calendar_event_id?: string | null
           id?: string
+          is_system_booking?: boolean
           manage_token?: string | null
           promo_code?: string | null
           service_id?: string
           slot_id?: string | null
           start_time?: string | null
           status?: string
+          system_action_day?: number | null
         }
         Relationships: [
           {
@@ -136,6 +145,36 @@ export type Database = {
           name?: string | null
           no_show_count?: number
           phone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      google_calendar_tokens: {
+        Row: {
+          access_token: string
+          calendar_id: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          refresh_token: string
+          updated_at: string
+        }
+        Insert: {
+          access_token: string
+          calendar_id?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          refresh_token: string
+          updated_at?: string
+        }
+        Update: {
+          access_token?: string
+          calendar_id?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          refresh_token?: string
           updated_at?: string
         }
         Relationships: []
