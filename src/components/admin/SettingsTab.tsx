@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Save, Loader2, Shield } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Save, Loader2, Shield, Calendar, Link2, Unlink, CheckCircle2, AlertCircle, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { airtableApi } from '@/lib/airtable';
 import { toast } from 'sonner';
+import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SettingsTabProps {
   adminPassword: string;
@@ -31,8 +35,65 @@ interface SettingsData {
 }
 
 export function SettingsTab({ adminPassword }: SettingsTabProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [formData, setFormData] = useState<Partial<SettingsData>>({});
+  const [isRunningSystemBookings, setIsRunningSystemBookings] = useState(false);
   const queryClient = useQueryClient();
+  
+  const { 
+    status: googleStatus, 
+    isLoading: isGoogleLoading, 
+    isConnecting,
+    connect: connectGoogle,
+    disconnect: disconnectGoogle,
+    isDisconnecting
+  } = useGoogleCalendar(adminPassword);
+
+  // Handle Google OAuth callback
+  useEffect(() => {
+    const googleSuccess = searchParams.get('google_success');
+    const googleError = searchParams.get('google_error');
+
+    if (googleSuccess === 'true') {
+      toast.success('Google Calendar sėkmingai susietas!');
+      queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      // Clear the URL params
+      setSearchParams({});
+    } else if (googleError) {
+      const errorMessages: Record<string, string> = {
+        'no_code': 'Nepavyko gauti autorizacijos kodo',
+        'invalid_state': 'Netinkamas autorizacijos būsenos kodas',
+        'unauthorized': 'Neautorizuotas',
+        'not_configured': 'Google Calendar nėra sukonfigūruotas',
+        'save_failed': 'Nepavyko išsaugoti prisijungimo duomenų',
+        'unknown': 'Nežinoma klaida'
+      };
+      toast.error(errorMessages[googleError] || `Klaida: ${googleError}`);
+      setSearchParams({});
+    }
+  }, [searchParams, queryClient, setSearchParams]);
+  
+  const handleRunSystemBookings = async () => {
+    setIsRunningSystemBookings(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('system-bookings', {
+        body: {}
+      });
+      
+      if (error) throw error;
+      
+      if (data.actions && data.actions.length > 0) {
+        toast.success(`Atlikta: ${data.actions.length} veiksmas(-ai)`);
+      } else {
+        toast.info('Nėra veiksmų šiuo metu');
+      }
+    } catch (error) {
+      console.error('System bookings error:', error);
+      toast.error('Klaida vykdant sisteminių rezervacijų funkciją');
+    } finally {
+      setIsRunningSystemBookings(false);
+    }
+  };
   
   const { data: settings, isLoading } = useQuery({
     queryKey: ['admin-settings'],
@@ -221,6 +282,104 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
               Įkelkite logotipą į kokią nors talpyklą ir įklijuokite nuorodą čia
             </p>
           </div>
+        </CardContent>
+      </Card>
+      
+      {/* Google Calendar Integration */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Calendar className="w-4 h-4" />
+            Google Calendar
+          </CardTitle>
+          <CardDescription>
+            Sinchronizuokite rezervacijas su Google Calendar
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {isGoogleLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Tikrinama...
+            </div>
+          ) : googleStatus?.connected ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                <span className="text-sm">Susietas</span>
+                <Badge variant="secondary" className="text-xs">
+                  {googleStatus.calendarId || 'primary'}
+                </Badge>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => disconnectGoogle()}
+                disabled={isDisconnecting}
+              >
+                {isDisconnecting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Unlink className="w-4 h-4 mr-2" />
+                )}
+                Atsijungti
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm">Nesusietas</span>
+              </div>
+              <Button 
+                onClick={connectGoogle}
+                disabled={isConnecting}
+                size="sm"
+              >
+                {isConnecting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Link2 className="w-4 h-4 mr-2" />
+                )}
+                Susieti su Google Calendar
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Prieš susiejant, administratorius turi sukonfigūruoti GOOGLE_CLIENT_ID ir GOOGLE_CLIENT_SECRET
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* System Bookings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Play className="w-4 h-4" />
+            Sisteminės rezervacijos
+          </CardTitle>
+          <CardDescription>
+            Automatinės "fake" rezervacijos užpildyti kalendorių
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button 
+            variant="outline"
+            onClick={handleRunSystemBookings}
+            disabled={isRunningSystemBookings}
+            size="sm"
+          >
+            {isRunningSystemBookings ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Play className="w-4 h-4 mr-2" />
+            )}
+            Paleisti dabar
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Ši funkcija automatiškai paleidžiama kasdien 02:00 nakties. 
+            Galite ją paleisti rankiniu būdu testavimui.
+          </p>
         </CardContent>
       </Card>
       

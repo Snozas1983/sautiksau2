@@ -1208,6 +1208,48 @@ serve(async (req) => {
       });
     }
 
+    // Google Calendar status check
+    if (req.method === 'POST') {
+      const body = await req.json().catch(() => ({}));
+      
+      if (body.action === 'google-calendar-status') {
+        const { data: tokens } = await supabaseAdmin
+          .from('google_calendar_tokens')
+          .select('calendar_id, expires_at')
+          .limit(1)
+          .single();
+        
+        if (tokens) {
+          return new Response(JSON.stringify({
+            connected: true,
+            calendarId: tokens.calendar_id,
+            expiresAt: tokens.expires_at
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } else {
+          return new Response(JSON.stringify({
+            connected: false,
+            calendarId: null,
+            expiresAt: null
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+      
+      if (body.action === 'google-calendar-disconnect') {
+        await supabaseAdmin
+          .from('google_calendar_tokens')
+          .delete()
+          .neq('id', '00000000-0000-0000-0000-000000000000');
+        
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // 404 for unknown endpoints
     return new Response(JSON.stringify({ error: 'Not found' }), {
       status: 404,
