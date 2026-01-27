@@ -571,6 +571,21 @@ serve(async (req) => {
         })
           .then(res => console.log('send-notifications response status:', res.status))
           .catch(err => console.error('Failed to send notifications:', err));
+        
+        // Sync to Google Calendar (only for confirmed bookings)
+        fetch(`${SUPABASE_URL}/functions/v1/sync-google-calendar`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({
+            bookingId: newBooking.id,
+            action: 'create'
+          }),
+        })
+          .then(res => console.log('Google Calendar sync status:', res.status))
+          .catch(err => console.error('Google Calendar sync error:', err));
       }
       
       return new Response(JSON.stringify({ success: true, booking: newBooking }), {
@@ -797,6 +812,13 @@ serve(async (req) => {
       const bookingId = path.split('/').pop();
       const body = await req.json();
       
+      // Get current booking data for comparison
+      const { data: currentBooking } = await supabaseAdmin
+        .from('bookings')
+        .select('status, date, start_time, end_time, google_calendar_event_id, google_calendar_source')
+        .eq('id', bookingId)
+        .single();
+      
       // Build update object
       const updateData: Record<string, any> = {};
       
@@ -821,6 +843,45 @@ serve(async (req) => {
       if (error) {
         console.error('Error updating booking:', error);
         throw error;
+      }
+      
+      // Sync with Google Calendar (only if not imported from Google)
+      if (currentBooking && !currentBooking.google_calendar_source) {
+        const statusChanged = body.status && body.status !== currentBooking.status;
+        const dateChanged = body.date && body.date !== currentBooking.date;
+        const timeChanged = body.startTime && body.startTime !== currentBooking.start_time?.substring(0, 5);
+        
+        if (statusChanged && body.status === 'cancelled') {
+          // Delete from Google Calendar when cancelled
+          fetch(`${SUPABASE_URL}/functions/v1/sync-google-calendar`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({
+              bookingId: bookingId,
+              action: 'delete'
+            }),
+          })
+            .then(res => console.log('Google Calendar delete status:', res.status))
+            .catch(err => console.error('Google Calendar delete error:', err));
+        } else if (dateChanged || timeChanged) {
+          // Update Google Calendar event when rescheduled
+          fetch(`${SUPABASE_URL}/functions/v1/sync-google-calendar`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({
+              bookingId: bookingId,
+              action: 'update'
+            }),
+          })
+            .then(res => console.log('Google Calendar update status:', res.status))
+            .catch(err => console.error('Google Calendar update error:', err));
+        }
       }
       
       return new Response(JSON.stringify({ success: true }), {
@@ -1219,13 +1280,18 @@ serve(async (req) => {
           .from('google_calendar_tokens')
           .select('calendar_id, expires_at')
           .limit(1)
-          .single();
+          .maybeSingle();
+        
+        // Get last sync timestamp from settings
+        const settings = await getSettings();
+        const lastSync = settings['google_calendar_last_sync'] || null;
         
         if (tokens) {
           return new Response(JSON.stringify({
             connected: true,
             calendarId: tokens.calendar_id,
-            expiresAt: tokens.expires_at
+            expiresAt: tokens.expires_at,
+            lastSync
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -1233,7 +1299,8 @@ serve(async (req) => {
           return new Response(JSON.stringify({
             connected: false,
             calendarId: null,
-            expiresAt: null
+            expiresAt: null,
+            lastSync: null
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });

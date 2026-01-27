@@ -7,6 +7,16 @@ interface GoogleCalendarStatus {
   connected: boolean;
   calendarId: string | null;
   expiresAt: string | null;
+  lastSync: string | null;
+}
+
+interface ImportStats {
+  created: number;
+  updated: number;
+  deleted: number;
+  skipped: number;
+  totalGoogleEvents: number;
+  externalEvents: number;
 }
 
 export function useGoogleCalendar(adminPassword: string) {
@@ -72,6 +82,33 @@ export function useGoogleCalendar(adminPassword: string) {
     }
   });
 
+  // Import from Google Calendar
+  const importMutation = useMutation({
+    mutationFn: async (): Promise<ImportStats> => {
+      const { data, error } = await supabase.functions.invoke('import-google-calendar', {
+        headers: { 'x-admin-password': adminPassword }
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-bookings'] });
+      
+      const totalChanges = data.created + data.updated + data.deleted;
+      if (totalChanges > 0) {
+        toast.success(`Sinchronizuota: +${data.created} nauji, ↻${data.updated} atnaujinti, -${data.deleted} ištrinti`);
+      } else {
+        toast.success('Kalendoriai sinchronizuoti, pakeitimų nėra');
+      }
+    },
+    onError: (error: Error) => {
+      console.error('Import error:', error);
+      toast.error('Klaida importuojant iš Google Calendar');
+    }
+  });
+
   // Sync a single booking
   const syncBooking = useCallback(async (bookingId: string, action: 'create' | 'update' | 'delete') => {
     try {
@@ -95,6 +132,8 @@ export function useGoogleCalendar(adminPassword: string) {
     connect,
     disconnect: disconnectMutation.mutate,
     isDisconnecting: disconnectMutation.isPending,
-    syncBooking
+    syncBooking,
+    importFromGoogle: importMutation.mutate,
+    isImporting: importMutation.isPending
   };
 }
