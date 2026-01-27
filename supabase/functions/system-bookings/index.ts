@@ -298,6 +298,33 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Trigger Google Calendar import for bidirectional sync
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      
+      if (supabaseUrl && serviceRoleKey) {
+        const syncResponse = await fetch(
+          `${supabaseUrl}/functions/v1/import-google-calendar`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${serviceRoleKey}`
+            }
+          }
+        );
+        
+        if (syncResponse.ok) {
+          const syncResult = await syncResponse.json();
+          actions.push(`Google Calendar sync: +${syncResult.created || 0} imported, -${syncResult.deleted || 0} removed`);
+        }
+      }
+    } catch (syncErr) {
+      console.error('Google Calendar sync error:', syncErr);
+      // Don't fail the whole function if sync fails
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 
