@@ -50,6 +50,7 @@ export type Database = {
           date: string | null
           end_time: string | null
           google_calendar_event_id: string | null
+          google_calendar_source: boolean | null
           id: string
           is_system_booking: boolean
           manage_token: string | null
@@ -68,6 +69,7 @@ export type Database = {
           date?: string | null
           end_time?: string | null
           google_calendar_event_id?: string | null
+          google_calendar_source?: boolean | null
           id?: string
           is_system_booking?: boolean
           manage_token?: string | null
@@ -86,6 +88,7 @@ export type Database = {
           date?: string | null
           end_time?: string | null
           google_calendar_event_id?: string | null
+          google_calendar_source?: boolean | null
           id?: string
           is_system_booking?: boolean
           manage_token?: string | null

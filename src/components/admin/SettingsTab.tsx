@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Save, Loader2, Shield, Calendar, Link2, Unlink, CheckCircle2, AlertCircle, Play } from 'lucide-react';
+import { Save, Loader2, Shield, Calendar, Link2, Unlink, CheckCircle2, AlertCircle, Play, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,8 @@ import { airtableApi } from '@/lib/airtable';
 import { toast } from 'sonner';
 import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+import { lt } from 'date-fns/locale';
 
 interface SettingsTabProps {
   adminPassword: string;
@@ -46,7 +48,9 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
     isConnecting,
     connect: connectGoogle,
     disconnect: disconnectGoogle,
-    isDisconnecting
+    isDisconnecting,
+    importFromGoogle,
+    isImporting
   } = useGoogleCalendar(adminPassword);
 
   // Handle Google OAuth callback
@@ -293,7 +297,7 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
             Google Calendar
           </CardTitle>
           <CardDescription>
-            Sinchronizuokite rezervacijas su Google Calendar
+            Dvikryptė sinchronizacija su Google Calendar
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -303,27 +307,58 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
               Tikrinama...
             </div>
           ) : googleStatus?.connected ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-green-500" />
+                <CheckCircle2 className="w-4 h-4 text-green-600" />
                 <span className="text-sm">Susietas</span>
                 <Badge variant="secondary" className="text-xs">
                   {googleStatus.calendarId || 'primary'}
                 </Badge>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => disconnectGoogle()}
-                disabled={isDisconnecting}
-              >
-                {isDisconnecting ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Unlink className="w-4 h-4 mr-2" />
-                )}
-                Atsijungti
-              </Button>
+              
+              {/* Last sync info */}
+              {googleStatus.lastSync && (
+                <p className="text-xs text-muted-foreground">
+                  Paskutinė sinchronizacija: {format(new Date(googleStatus.lastSync), 'yyyy-MM-dd HH:mm', { locale: lt })}
+                </p>
+              )}
+              
+              {/* Sync button */}
+              <div className="flex flex-wrap gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => importFromGoogle()}
+                  disabled={isImporting}
+                >
+                  {isImporting ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                  )}
+                  Sinchronizuoti dabar
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => disconnectGoogle()}
+                  disabled={isDisconnecting}
+                  className="text-muted-foreground"
+                >
+                  {isDisconnecting ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Unlink className="w-4 h-4 mr-2" />
+                  )}
+                  Atsijungti
+                </Button>
+              </div>
+              
+              <p className="text-xs text-muted-foreground">
+                • Lovable rezervacijos automatiškai atsiranda Google Calendar<br />
+                • Google Calendar įvykiai importuojami kaip užimti laikai<br />
+                • Atšauktos rezervacijos ištrinamos iš abiejų sistemų
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
