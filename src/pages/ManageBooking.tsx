@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import logo from '@/assets/logo.png';
 import { format, parseISO, addHours, isBefore } from 'date-fns';
 import { lt } from 'date-fns/locale';
 import { Calendar, Clock, ArrowLeft, CalendarX, CalendarClock } from 'lucide-react';
@@ -189,9 +190,19 @@ const ManageBooking = () => {
   }
 
   if (error || !booking) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+      {/* Logo */}
+      <div className="flex justify-center mb-6">
+        <a href="/">
+          <img 
+            src={logo} 
+            alt="SAU TIK SAU masažo studija" 
+            className="w-32 md:w-40"
+          />
+        </a>
+      </div>
+      <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CardTitle className="text-destructive">
               {error || 'Rezervacija nerasta'}
@@ -217,6 +228,17 @@ const ManageBooking = () => {
   return (
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-md mx-auto">
+        {/* Logo */}
+        <div className="flex justify-center mb-6">
+          <a href="/">
+            <img 
+              src={logo} 
+              alt="SAU TIK SAU masažo studija" 
+              className="w-32 md:w-40"
+            />
+          </a>
+        </div>
+
         <Button
           variant="ghost"
           onClick={() => navigate('/')}
