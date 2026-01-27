@@ -169,10 +169,15 @@ Deno.serve(async (req) => {
 
   try {
     const adminPassword = req.headers.get('x-admin-password');
+    const authHeader = req.headers.get('authorization');
     const storedPassword = Deno.env.get('ADMIN_PASSWORD');
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    // Validate admin password
-    if (!adminPassword || adminPassword !== storedPassword) {
+    // Validate either admin password or service role key
+    const isAdminAuth = adminPassword && adminPassword === storedPassword;
+    const isServiceRoleAuth = authHeader && authHeader === `Bearer ${serviceRoleKey}`;
+
+    if (!isAdminAuth && !isServiceRoleAuth) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
