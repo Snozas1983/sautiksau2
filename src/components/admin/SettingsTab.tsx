@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Save, Loader2, Shield, Calendar, Link2, Unlink, CheckCircle2, AlertCircle, Play, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { TimeInput } from '@/components/ui/time-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -169,18 +170,16 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Pradžia</Label>
-              <Input
-                type="time"
-                value={formData.work_start || ''}
-                onChange={(e) => setFormData({ ...formData, work_start: e.target.value })}
+              <TimeInput
+                value={formData.work_start || '09:00'}
+                onChange={(value) => setFormData({ ...formData, work_start: value })}
               />
             </div>
             <div className="space-y-2">
               <Label>Pabaiga</Label>
-              <Input
-                type="time"
-                value={formData.work_end || ''}
-                onChange={(e) => setFormData({ ...formData, work_end: e.target.value })}
+              <TimeInput
+                value={formData.work_end || '18:00'}
+                onChange={(value) => setFormData({ ...formData, work_end: value })}
               />
             </div>
           </div>

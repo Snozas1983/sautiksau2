@@ -201,12 +201,6 @@ const ManageBooking = () => {
             className="w-32 md:w-40"
           />
         </a>
-        <p 
-          className="text-sm text-muted-foreground tracking-[0.2em] mt-2 uppercase"
-          style={{ fontFamily: "'Montserrat', sans-serif" }}
-        >
-          Masažo studija
-        </p>
       </div>
       <Card className="w-full max-w-md">
           <CardHeader className="text-center">
@@ -243,12 +237,6 @@ const ManageBooking = () => {
               className="w-32 md:w-40"
             />
           </a>
-          <p 
-            className="text-sm text-muted-foreground tracking-[0.2em] mt-2 uppercase"
-            style={{ fontFamily: "'Montserrat', sans-serif" }}
-          >
-            Masažo studija
-          </p>
         </div>
 
         <Button
