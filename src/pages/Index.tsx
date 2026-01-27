@@ -26,8 +26,6 @@ const Index = () => {
   const contactInstagram = settings?.contactInstagram || 'https://www.instagram.com/sautiksaumasazas/';
   
   return <div className="min-h-screen">
-      {/* Admin Quick Panel (visible only with ?admin=1) */}
-      <AdminQuickPanel />
       {/* Hero Section */}
       <section className="relative min-h-screen flex flex-col items-center justify-center px-6 py-20 overflow-hidden">
         <div className="absolute inset-0 w-full h-full">
