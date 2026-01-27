@@ -181,11 +181,6 @@ export const BookingSection = () => {
                         maxDate={maxDate}
                       />
                       
-                      {/* Treatwell mygtukas */}
-                      <div className="pt-4 border-t border-booking-border">
-                        <p className="text-sm text-booking-muted mb-3">Arba registruokitės per:</p>
-                        <TreatwellButton />
-                      </div>
                     </div>
                   )
                 )}
