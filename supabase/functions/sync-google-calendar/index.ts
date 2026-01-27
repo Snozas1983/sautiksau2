@@ -181,7 +181,7 @@ Deno.serve(async (req) => {
       .from('google_calendar_tokens')
       .select('*')
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (!tokens) {
       return new Response(

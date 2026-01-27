@@ -22,12 +22,14 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-red-500/20 text-red-700 border-red-500/40',
   no_show: 'bg-gray-500/20 text-gray-700 border-gray-500/40',
   blacklisted: 'bg-black/80 text-white border-black',
+  system: 'bg-slate-300/50 text-slate-600 border-slate-400/50',
 };
 
 const STATUS_LABELS: Record<string, string> = {
   confirmed: 'Patvirtintas',
   cancelled: 'Atšauktas',
   no_show: 'Neatvyko',
+  system: 'Sistema',
 };
 
 export function AdminDayView({
@@ -130,42 +132,54 @@ export function AdminDayView({
           </div>
         ) : (
           <div className="space-y-3">
-            {sortedBookings.map((booking) => (
-              <button
-                key={booking.id}
-                onClick={() => onBookingClick(booking)}
-                className={cn(
-                  'w-full text-left p-4 rounded-lg border transition-all hover:shadow-md',
-                  booking.isBlacklisted 
-                    ? STATUS_COLORS.blacklisted 
-                    : (STATUS_COLORS[booking.status] || STATUS_COLORS.confirmed)
-                )}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-1">
-                      <span className="text-lg font-bold">
-                        {booking.startTime} - {booking.endTime}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-white/30">
-                        {STATUS_LABELS[booking.status] || booking.status}
-                      </span>
-                    </div>
-                    <p className="text-base font-medium">{booking.customerName}</p>
-                    <p className="text-sm opacity-80">{booking.serviceName}</p>
-                    <div className="flex items-center gap-1 mt-2 text-sm opacity-70">
-                      <Phone className="h-3 w-3" />
-                      <span>{booking.customerPhone}</span>
+            {sortedBookings.map((booking) => {
+              // Determine the color based on booking type
+              let colorClass = STATUS_COLORS[booking.status] || STATUS_COLORS.confirmed;
+              if (booking.isBlacklisted) {
+                colorClass = STATUS_COLORS.blacklisted;
+              } else if (booking.isSystemBooking) {
+                colorClass = STATUS_COLORS.system;
+              }
+
+              return (
+                <button
+                  key={booking.id}
+                  onClick={() => onBookingClick(booking)}
+                  className={cn(
+                    'w-full text-left p-4 rounded-lg border transition-all hover:shadow-md',
+                    colorClass
+                  )}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-1">
+                        <span className="text-lg font-bold">
+                          {booking.startTime} - {booking.endTime}
+                        </span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-white/30">
+                          {booking.isSystemBooking ? STATUS_LABELS.system : (STATUS_LABELS[booking.status] || booking.status)}
+                        </span>
+                      </div>
+                      <p className="text-base font-medium">
+                        {booking.isSystemBooking ? '[SISTEMA]' : booking.customerName}
+                      </p>
+                      <p className="text-sm opacity-80">{booking.serviceName}</p>
+                      {!booking.isSystemBooking && (
+                        <div className="flex items-center gap-1 mt-2 text-sm opacity-70">
+                          <Phone className="h-3 w-3" />
+                          <span>{booking.customerPhone}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-                {booking.isBlacklisted && (
-                  <div className="mt-2 text-xs font-semibold text-red-200">
-                    ⚠️ Juodajame sąraše
-                  </div>
-                )}
-              </button>
-            ))}
+                  {booking.isBlacklisted && (
+                    <div className="mt-2 text-xs font-semibold text-red-200">
+                      ⚠️ Juodajame sąraše
+                    </div>
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

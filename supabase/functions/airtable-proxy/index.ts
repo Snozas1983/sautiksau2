@@ -783,6 +783,8 @@ serve(async (req) => {
         promoCode: record.promo_code,
         createdAt: record.created_at,
         isBlacklisted: blacklistedPhones.has(record.customer_phone),
+        isSystemBooking: record.is_system_booking || false,
+        systemActionDay: record.system_action_day,
       }));
       
       return new Response(JSON.stringify({ bookings }), {

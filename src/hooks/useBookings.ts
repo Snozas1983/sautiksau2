@@ -16,6 +16,8 @@ export interface Booking {
   promoCode?: string;
   createdAt?: string;
   isBlacklisted?: boolean;
+  isSystemBooking?: boolean;
+  systemActionDay?: number | null;
 }
 
 export interface CreateBookingData {

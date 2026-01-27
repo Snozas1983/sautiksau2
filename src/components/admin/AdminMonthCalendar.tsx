@@ -23,6 +23,7 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-red-500/20 text-red-700 border-red-500/40',
   no_show: 'bg-gray-500/20 text-gray-700 border-gray-500/40',
   blacklisted: 'bg-black/80 text-white border-black',
+  system: 'bg-slate-300/50 text-slate-600 border-slate-400/50',
 };
 
 export function AdminMonthCalendar({ 
@@ -209,22 +210,32 @@ export function AdminMonthCalendar({
 
               {/* Bookings */}
               <div className="space-y-1">
-                {visibleBookings.map((booking) => (
-                  <button
-                    key={booking.id}
-                    data-booking
-                    onClick={() => onBookingClick(booking)}
-                    className={cn(
-                      'w-full text-left px-1.5 py-0.5 rounded text-xs border truncate transition-all hover:opacity-80',
-                      booking.isBlacklisted 
-                        ? STATUS_COLORS.blacklisted 
-                        : (STATUS_COLORS[booking.status] || STATUS_COLORS.confirmed)
-                    )}
-                  >
-                    <span className="font-medium">{booking.startTime}</span>
-                    <span className="ml-1 opacity-80">{booking.customerName.split(' ')[0]}</span>
-                  </button>
-                ))}
+                {visibleBookings.map((booking) => {
+                  // Determine the color based on booking type
+                  let colorClass = STATUS_COLORS[booking.status] || STATUS_COLORS.confirmed;
+                  if (booking.isBlacklisted) {
+                    colorClass = STATUS_COLORS.blacklisted;
+                  } else if (booking.isSystemBooking) {
+                    colorClass = STATUS_COLORS.system;
+                  }
+
+                  return (
+                    <button
+                      key={booking.id}
+                      data-booking
+                      onClick={() => onBookingClick(booking)}
+                      className={cn(
+                        'w-full text-left px-1.5 py-0.5 rounded text-xs border truncate transition-all hover:opacity-80',
+                        colorClass
+                      )}
+                    >
+                      <span className="font-medium">{booking.startTime}</span>
+                      <span className="ml-1 opacity-80">
+                        {booking.isSystemBooking ? '[SYS]' : booking.customerName.split(' ')[0]}
+                      </span>
+                    </button>
+                  );
+                })}
                 {hiddenCount > 0 && (
                   <div className="text-xs text-muted-foreground px-1.5">
                     +{hiddenCount} daugiau

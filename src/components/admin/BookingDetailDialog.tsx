@@ -1,6 +1,6 @@
 import { format, parseISO } from 'date-fns';
 import { lt } from 'date-fns/locale';
-import { Calendar, Clock, User, Phone, Mail, Scissors, AlertTriangle } from 'lucide-react';
+import { Calendar, Clock, User, Phone, Mail, Scissors, AlertTriangle, Bot } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -54,6 +54,7 @@ export function BookingDetailDialog({
   const formattedDate = format(parseISO(booking.date), 'EEEE, MMMM d', { locale: lt });
   const isCancellable = booking.status !== 'cancelled' && booking.status !== 'no_show';
   const isPending = booking.status === 'pending';
+  const isSystem = booking.isSystemBooking;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -63,8 +64,19 @@ export function BookingDetailDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* System booking info */}
+          {isSystem && (
+            <div className="flex items-start gap-2 p-3 bg-slate-100 border border-slate-300 rounded-lg">
+              <Bot className="h-5 w-5 text-slate-600 mt-0.5 flex-shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium text-slate-800">Sisteminė rezervacija</p>
+                <p className="text-slate-600">Ši rezervacija buvo sukurta automatiškai sistemos, kad kalendorius atrodytų užimtesnis.</p>
+              </div>
+            </div>
+          )}
+
           {/* Pending approval warning */}
-          {isPending && (
+          {isPending && !isSystem && (
             <div className="flex items-start gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
               <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
               <div className="text-sm">
@@ -86,30 +98,32 @@ export function BookingDetailDialog({
             </div>
           </div>
 
-          {/* Customer info */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <User className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">{booking.customerName}</span>
-              {booking.isBlacklisted && (
-                <Badge variant="destructive" className="text-xs">Juodas sąrašas</Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              <a href={`tel:${booking.customerPhone}`} className="text-primary hover:underline">
-                {booking.customerPhone}
-              </a>
-            </div>
-            {booking.customerEmail && (
+          {/* Customer info - only show for non-system bookings */}
+          {!isSystem && (
+            <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <Mail className="h-4 w-4 text-muted-foreground" />
-                <a href={`mailto:${booking.customerEmail}`} className="text-primary hover:underline">
-                  {booking.customerEmail}
+                <User className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium">{booking.customerName}</span>
+                {booking.isBlacklisted && (
+                  <Badge variant="destructive" className="text-xs">Juodas sąrašas</Badge>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <a href={`tel:${booking.customerPhone}`} className="text-primary hover:underline">
+                  {booking.customerPhone}
                 </a>
               </div>
-            )}
-          </div>
+              {booking.customerEmail && (
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <a href={`mailto:${booking.customerEmail}`} className="text-primary hover:underline">
+                    {booking.customerEmail}
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Service */}
           <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
