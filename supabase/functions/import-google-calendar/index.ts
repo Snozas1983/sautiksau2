@@ -111,6 +111,42 @@ async function fetchGoogleCalendarEvents(
   return data.items || [];
 }
 
+// Update a Google Calendar event
+async function updateGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  updates: { summary?: string }
+): Promise<boolean> {
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
+  
+  // First get the existing event
+  const getResponse = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+  });
+  
+  if (!getResponse.ok) return false;
+  
+  const existingEvent = await getResponse.json();
+  
+  // Update with new values
+  const updatedEvent = {
+    ...existingEvent,
+    ...updates
+  };
+  
+  const updateResponse = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(updatedEvent)
+  });
+  
+  return updateResponse.ok;
+}
+
 // Parse Google event to get date and time
 function parseGoogleEvent(event: GoogleEvent): { date: string; startTime: string; endTime: string } | null {
   // Skip cancelled events
@@ -234,11 +270,12 @@ Deno.serve(async (req) => {
     // Events NOT created by Lovable = external events to import
     const externalEvents = googleEvents.filter(event => {
       // Skip events that are already synced from Lovable
-      // Lovable creates events with customer names or "[SISTEMA]" prefix
       const summary = event.summary || '';
-      // If it starts with [SISTEMA] it's from Lovable system bookings
+      // If it starts with STS - it's our event, skip
+      if (summary.startsWith('STS ')) return false;
+      // Legacy: If it starts with [SISTEMA] it's from old Lovable system bookings
       if (summary.startsWith('[SISTEMA]')) return false;
-      // If it looks like a customer booking "Name - Service", skip it
+      // Legacy: If it looks like a customer booking "Name - Service", skip it
       if (summary.includes(' - ') && !summary.includes('@')) return false;
       
       return true;
@@ -337,6 +374,38 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Fix old events that don't have STS prefix
+    const eventsNeedingUpdate = googleEvents.filter(event => {
+      const summary = event.summary || '';
+      // If starts with [SISTEMA] - old format, needs update
+      if (summary.startsWith('[SISTEMA]')) return true;
+      // If looks like our format "Name - Service" but no STS prefix
+      if (summary.includes(' - ') && !summary.includes('@') && !summary.startsWith('STS ')) return true;
+      return false;
+    });
+
+    let stsFixed = 0;
+    for (const event of eventsNeedingUpdate) {
+      const oldSummary = event.summary || '';
+      let newSummary = oldSummary;
+      
+      if (oldSummary.startsWith('[SISTEMA]')) {
+        newSummary = 'STS Užimta';
+      } else {
+        newSummary = `STS ${oldSummary}`;
+      }
+      
+      const updated = await updateGoogleCalendarEvent(accessToken, calendarId, event.id, { summary: newSummary });
+      if (updated) {
+        stsFixed++;
+        console.log(`Fixed event: "${oldSummary}" -> "${newSummary}"`);
+      }
+    }
+    
+    if (stsFixed > 0) {
+      console.log(`Fixed ${stsFixed} events with STS prefix`);
+    }
+
     // Update last sync timestamp in settings
     await supabase
       .from('settings')
@@ -355,6 +424,7 @@ Deno.serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         ...stats,
+        stsFixed,
         totalGoogleEvents: googleEvents.length,
         externalEvents: externalEvents.length
       }),

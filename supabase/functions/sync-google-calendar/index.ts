@@ -104,8 +104,8 @@ async function syncEventToCalendar(
   
   const event = {
     summary: isSystem 
-      ? '[SISTEMA] Užimta' 
-      : `${booking.customer_name} - ${booking.service_name || 'Paslauga'}`,
+      ? 'STS Užimta' 
+      : `STS ${booking.customer_name} - ${booking.service_name || 'Paslauga'}`,
     description: isSystem 
       ? 'Sisteminė rezervacija' 
       : `Tel: ${booking.customer_phone}${booking.customer_email ? `\nEl. paštas: ${booking.customer_email}` : ''}`,

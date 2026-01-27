@@ -95,14 +95,35 @@ async function getAvailableSlots(
   return availableSlots;
 }
 
+// Sync a booking to Google Calendar
+async function syncToGoogleCalendar(bookingId: string, action: 'create' | 'update' | 'delete'): Promise<void> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  
+  if (!supabaseUrl || !serviceRoleKey) return;
+  
+  try {
+    await fetch(`${supabaseUrl}/functions/v1/sync-google-calendar`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceRoleKey}`
+      },
+      body: JSON.stringify({ bookingId, action })
+    });
+  } catch (err) {
+    console.error('Google sync error:', err);
+  }
+}
+
 // Create a system booking
 async function createSystemBooking(
   supabase: SupabaseClient,
   date: string,
   slot: { service: Service; startTime: string; endTime: string },
   actionDay: number
-): Promise<void> {
-  await supabase.from('bookings').insert({
+): Promise<string | null> {
+  const { data, error } = await supabase.from('bookings').insert({
     date,
     start_time: slot.startTime,
     end_time: slot.endTime,
@@ -112,7 +133,14 @@ async function createSystemBooking(
     status: 'confirmed',
     is_system_booking: true,
     system_action_day: actionDay
-  });
+  }).select('id').single();
+  
+  if (error || !data) return null;
+  
+  // Sync to Google Calendar
+  await syncToGoogleCalendar(data.id, 'create');
+  
+  return data.id;
 }
 
 // Cancel a random system booking for a date
@@ -137,6 +165,9 @@ async function cancelRandomSystemBooking(
     .from('bookings')
     .update({ status: 'cancelled' })
     .eq('id', bookingToCancel.id);
+
+  // Sync deletion to Google Calendar
+  await syncToGoogleCalendar(bookingToCancel.id, 'delete');
 
   return true;
 }
@@ -177,6 +208,9 @@ async function rescheduleRandomSystemBooking(
       service_id: newSlot.service.id
     })
     .eq('id', bookingToReschedule.id);
+
+  // Sync update to Google Calendar
+  await syncToGoogleCalendar(bookingToReschedule.id, 'update');
 
   return true;
 }
