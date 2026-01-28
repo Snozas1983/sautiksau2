@@ -231,7 +231,7 @@ export function AdminMonthCalendar({
                     >
                       <span className="font-medium">{booking.startTime}</span>
                       <span className="ml-1 opacity-80">
-                        {booking.isSystemBooking ? '[SYS]' : booking.customerName.split(' ')[0]}
+                        {booking.isSystemBooking ? 'SISTEMA' : booking.customerName.split(' ')[0]}
                       </span>
                     </button>
                   );

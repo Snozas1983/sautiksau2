@@ -44,7 +44,7 @@ async function syncEventToCalendar(
   
   const event = {
     summary: isSystem 
-      ? 'STS Užimta' 
+      ? 'STS SISTEMA' 
       : `STS ${booking.customer_name} - ${booking.service_name || 'Paslauga'}`,
     description: isSystem 
       ? 'Sisteminė rezervacija' 

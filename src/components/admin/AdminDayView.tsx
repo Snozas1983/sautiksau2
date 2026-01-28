@@ -161,7 +161,7 @@ export function AdminDayView({
                         </span>
                       </div>
                       <p className="text-base font-medium">
-                        {booking.isSystemBooking ? '[SISTEMA]' : booking.customerName}
+                        {booking.isSystemBooking ? 'SISTEMA' : booking.customerName}
                       </p>
                       <p className="text-sm opacity-80">{booking.serviceName}</p>
                       {!booking.isSystemBooking && (
