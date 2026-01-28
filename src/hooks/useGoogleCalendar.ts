@@ -20,6 +20,16 @@ interface ImportStats {
   externalEvents: number;
 }
 
+interface FullSyncStats {
+  success: boolean;
+  pushedToGoogle: number;
+  updatedInGoogle: number;
+  pulledFromGoogle: number;
+  updatedFromGoogle: number;
+  deletedFromGoogle: number;
+  errors: string[];
+}
+
 export function useGoogleCalendar(adminPassword: string) {
   const queryClient = useQueryClient();
 
@@ -38,7 +48,7 @@ export function useGoogleCalendar(adminPassword: string) {
     enabled: !!adminPassword,
   });
 
-  // Import from Google Calendar
+  // Import from Google Calendar (legacy - one-way import)
   const importMutation = useMutation({
     mutationFn: async (): Promise<ImportStats> => {
       const { data, error } = await supabase.functions.invoke('import-google-calendar', {
@@ -65,6 +75,34 @@ export function useGoogleCalendar(adminPassword: string) {
     }
   });
 
+  // Full two-way sync with date range
+  const fullSyncMutation = useMutation({
+    mutationFn: async (params: { startDate: string; endDate: string }): Promise<FullSyncStats> => {
+      const { data, error } = await supabase.functions.invoke('full-sync-google-calendar', {
+        headers: { 'x-admin-password': adminPassword },
+        body: { startDate: params.startDate, endDate: params.endDate }
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-bookings'] });
+      
+      const pushed = data.pushedToGoogle + data.updatedInGoogle;
+      const pulled = data.pulledFromGoogle + data.updatedFromGoogle + data.deletedFromGoogle;
+      
+      toast.success(
+        `Sinchronizuota: ${pushed > 0 ? `+${data.pushedToGoogle} į Google, ↻${data.updatedInGoogle} atnaujinti` : ''}${pushed > 0 && pulled > 0 ? ' | ' : ''}${pulled > 0 ? `+${data.pulledFromGoogle} iš Google, ↻${data.updatedFromGoogle} atnaujinti, -${data.deletedFromGoogle} ištrinti` : ''}${pushed === 0 && pulled === 0 ? 'Pakeitimų nėra' : ''}`
+      );
+    },
+    onError: (error: Error) => {
+      console.error('Full sync error:', error);
+      toast.error('Klaida sinchronizuojant su Google Calendar');
+    }
+  });
+
   // Sync a single booking
   const syncBooking = useCallback(async (bookingId: string, action: 'create' | 'update' | 'delete') => {
     try {
@@ -86,6 +124,8 @@ export function useGoogleCalendar(adminPassword: string) {
     isLoading,
     syncBooking,
     importFromGoogle: importMutation.mutate,
-    isImporting: importMutation.isPending
+    isImporting: importMutation.isPending,
+    fullSync: fullSyncMutation.mutate,
+    isFullSyncing: fullSyncMutation.isPending
   };
 }

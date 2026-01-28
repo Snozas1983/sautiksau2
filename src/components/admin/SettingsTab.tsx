@@ -1,19 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Save, Loader2, Shield, Calendar, CheckCircle2, AlertCircle, Play, RefreshCw } from 'lucide-react';
+import { Save, Loader2, Shield, Calendar, CheckCircle2, AlertCircle, Play, RefreshCw, CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TimeInput } from '@/components/ui/time-input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { airtableApi } from '@/lib/airtable';
 import { toast } from 'sonner';
 import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
 import { supabase } from '@/integrations/supabase/client';
-import { format } from 'date-fns';
+import { format, addDays } from 'date-fns';
 import { lt } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
 interface SettingsTabProps {
   adminPassword: string;
@@ -41,13 +44,15 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [formData, setFormData] = useState<Partial<SettingsData>>({});
   const [isRunningSystemBookings, setIsRunningSystemBookings] = useState(false);
+  const [syncStartDate, setSyncStartDate] = useState<Date>(new Date());
+  const [syncEndDate, setSyncEndDate] = useState<Date>(addDays(new Date(), 60));
   const queryClient = useQueryClient();
   
   const { 
     status: googleStatus, 
     isLoading: isGoogleLoading, 
-    importFromGoogle,
-    isImporting
+    fullSync,
+    isFullSyncing
   } = useGoogleCalendar(adminPassword);
 
   // Handle Google OAuth callback
@@ -304,9 +309,9 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
           ) : googleStatus?.connected ? (
             <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 <span className="text-sm">Susietas (Service Account)</span>
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="secondary" className="text-xs max-w-[200px] truncate">
                   {googleStatus.calendarId || 'primary'}
                 </Badge>
               </div>
@@ -318,14 +323,73 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
                 </p>
               )}
               
+              {/* Date range selection */}
+              <div className="space-y-2">
+                <Label className="text-xs">Sinchronizacijos intervalas</Label>
+                <div className="flex gap-2 items-center">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "w-[130px] justify-start text-left font-normal",
+                          !syncStartDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {syncStartDate ? format(syncStartDate, "yyyy-MM-dd") : "Nuo"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={syncStartDate}
+                        onSelect={(date) => date && setSyncStartDate(date)}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <span className="text-muted-foreground">—</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                          "w-[130px] justify-start text-left font-normal",
+                          !syncEndDate && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {syncEndDate ? format(syncEndDate, "yyyy-MM-dd") : "Iki"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={syncEndDate}
+                        onSelect={(date) => date && setSyncEndDate(date)}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+              
               {/* Sync button */}
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={() => importFromGoogle()}
-                disabled={isImporting}
+                onClick={() => fullSync({ 
+                  startDate: format(syncStartDate, 'yyyy-MM-dd'), 
+                  endDate: format(syncEndDate, 'yyyy-MM-dd') 
+                })}
+                disabled={isFullSyncing}
               >
-                {isImporting ? (
+                {isFullSyncing ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
                   <RefreshCw className="w-4 h-4 mr-2" />
@@ -334,10 +398,10 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
               </Button>
               
               <p className="text-xs text-muted-foreground">
-                • Lovable rezervacijos automatiškai atsiranda Google Calendar<br />
+                • Lovable rezervacijos automatiškai siunčiamos į Google Calendar<br />
                 • Google Calendar įvykiai importuojami kaip užimti laikai<br />
                 • Atšauktos rezervacijos ištrinamos iš abiejų sistemų<br />
-                • Sinchronizacija vyksta automatiškai kas 30 min.
+                • Automatinė sinchronizacija vyksta kas 30 min.
               </p>
             </div>
           ) : (
