@@ -12,6 +12,7 @@ interface FullSyncStats {
   pulledFromGoogle: number;
   updatedFromGoogle: number;
   deletedFromGoogle: number;
+  renamedInGoogle: number;
   errors: string[];
 }
 
@@ -47,7 +48,7 @@ async function pushBookingToGoogle(
   
   const event = {
     summary: isSystem 
-      ? 'STS Užimta' 
+      ? 'STS SISTEMA' 
       : `STS ${booking.customer_name} - ${booking.service_name || 'Paslauga'}`,
     description: isSystem 
       ? 'Sisteminė rezervacija' 
@@ -143,6 +144,40 @@ function parseGoogleEvent(event: {
   return { date, startTime, endTime };
 }
 
+// Update a Google Calendar event
+async function updateGoogleCalendarEvent(
+  accessToken: string,
+  calendarId: string,
+  eventId: string,
+  updates: { summary?: string }
+): Promise<boolean> {
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${eventId}`;
+  
+  const getResponse = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${accessToken}` }
+  });
+  
+  if (!getResponse.ok) return false;
+  
+  const existingEvent = await getResponse.json();
+  
+  const updatedEvent = {
+    ...existingEvent,
+    ...updates
+  };
+  
+  const updateResponse = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(updatedEvent)
+  });
+  
+  return updateResponse.ok;
+}
+
 // Pull events from Google Calendar (import external events)
 async function pullFromGoogle(
   supabase: any,
@@ -150,8 +185,8 @@ async function pullFromGoogle(
   calendarId: string,
   startDate: string,
   endDate: string
-): Promise<{ created: number; updated: number; deleted: number }> {
-  const stats = { created: 0, updated: 0, deleted: 0 };
+): Promise<{ created: number; updated: number; deleted: number; renamed: number }> {
+  const stats = { created: 0, updated: 0, deleted: 0, renamed: 0 };
   
   const timeMin = new Date(startDate).toISOString();
   const timeMax = new Date(endDate).toISOString();
@@ -176,10 +211,37 @@ async function pullFromGoogle(
   const googleEvents = data.items || [];
   console.log(`Found ${googleEvents.length} events in Google Calendar`);
   
-  // Filter to only external events (not STS-prefixed)
-  const externalEvents = googleEvents.filter((e: { summary?: string }) => 
-    e.summary && !e.summary.startsWith('STS ')
-  );
+  // First, rename all events that don't have STS prefix
+  for (const event of googleEvents) {
+    const summary = event.summary || '';
+    if (!summary.startsWith('STS ')) {
+      let newSummary: string;
+      if (summary.startsWith('[SISTEMA]')) {
+        newSummary = 'STS SISTEMA';
+      } else {
+        newSummary = `STS ${summary}`;
+      }
+      
+      const updated = await updateGoogleCalendarEvent(accessToken, calendarId, event.id, { summary: newSummary });
+      if (updated) {
+        stats.renamed++;
+        console.log(`Renamed: "${summary}" -> "${newSummary}"`);
+        // Update in-memory for further processing
+        event.summary = newSummary;
+      }
+    }
+  }
+  
+  // Filter to only external events (not STS-prefixed system events)
+  // After renaming, all should have STS prefix, so filter by what type they are
+  const externalEvents = googleEvents.filter((e: { summary?: string }) => {
+    const summary = e.summary || '';
+    // Skip our system events
+    if (summary === 'STS SISTEMA') return false;
+    if (summary.startsWith('STS ') && summary.includes(' - ')) return false; // Our client bookings format
+    // Include all other events (now renamed with STS prefix)
+    return true;
+  });
   
   console.log(`${externalEvents.length} external events to process`);
   
@@ -334,6 +396,7 @@ Deno.serve(async (req) => {
       pulledFromGoogle: 0,
       updatedFromGoogle: 0,
       deletedFromGoogle: 0,
+      renamedInGoogle: 0,
       errors: []
     };
 
@@ -409,8 +472,9 @@ Deno.serve(async (req) => {
     stats.pulledFromGoogle = pullStats.created;
     stats.updatedFromGoogle = pullStats.updated;
     stats.deletedFromGoogle = pullStats.deleted;
+    stats.renamedInGoogle = pullStats.renamed;
 
-    console.log(`Phase 2 complete: ${pullStats.created} created, ${pullStats.updated} updated, ${pullStats.deleted} deleted`);
+    console.log(`Phase 2 complete: ${pullStats.created} created, ${pullStats.updated} updated, ${pullStats.deleted} deleted, ${pullStats.renamed} renamed`);
 
     // Update last sync time
     const { data: existingSetting } = await supabase

@@ -188,11 +188,13 @@ Deno.serve(async (req) => {
     
     console.log(`Found ${googleEvents.length} events in Google Calendar`);
 
+    // Filter to only external events (not already synced from our system)
     const externalEvents = googleEvents.filter(event => {
       const summary = event.summary || '';
+      // Skip our own synced events
       if (summary.startsWith('STS ')) return false;
+      // Skip legacy system events
       if (summary.startsWith('[SISTEMA]')) return false;
-      if (summary.includes(' - ') && !summary.includes('@')) return false;
       return true;
     });
 
@@ -283,11 +285,15 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Find all events that need STS prefix added
     const eventsNeedingUpdate = googleEvents.filter(event => {
       const summary = event.summary || '';
+      // Skip already prefixed events
+      if (summary.startsWith('STS ')) return false;
+      // Update legacy [SISTEMA] events
       if (summary.startsWith('[SISTEMA]')) return true;
-      if (summary.includes(' - ') && !summary.includes('@') && !summary.startsWith('STS ')) return true;
-      return false;
+      // Add STS prefix to any other event
+      return true;
     });
 
     let stsFixed = 0;
@@ -296,7 +302,7 @@ Deno.serve(async (req) => {
       let newSummary = oldSummary;
       
       if (oldSummary.startsWith('[SISTEMA]')) {
-        newSummary = 'STS Užimta';
+        newSummary = 'STS SISTEMA';
       } else {
         newSummary = `STS ${oldSummary}`;
       }
