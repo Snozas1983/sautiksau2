@@ -149,6 +149,8 @@ serve(async (req) => {
       const blockExceptionsByDayOfWeek = new Map<number, Array<{ startTime: string; endTime: string }>>();
       const allowExceptionsByDate = new Map<string, Array<{ startTime: string; endTime: string }>>();
       const allowExceptionsByDayOfWeek = new Map<number, Array<{ startTime: string; endTime: string }>>();
+      // Date range exceptions (blocking multiple days with single entry)
+      const dateRangeExceptions: Array<{ startDate: string; endDate: string; startTime: string; endTime: string }> = [];
       
       for (const ex of exceptionsData || []) {
         const startTime = ex.start_time?.substring(0, 5);
@@ -156,7 +158,15 @@ serve(async (req) => {
         const interval = { startTime, endTime };
         
         if (ex.exception_type === 'block') {
-          if (ex.is_recurring && ex.day_of_week !== null) {
+          // Check if this is a date range exception
+          if (ex.date && ex.end_date) {
+            dateRangeExceptions.push({
+              startDate: ex.date,
+              endDate: ex.end_date,
+              startTime,
+              endTime
+            });
+          } else if (ex.is_recurring && ex.day_of_week !== null) {
             if (!blockExceptionsByDayOfWeek.has(ex.day_of_week)) {
               blockExceptionsByDayOfWeek.set(ex.day_of_week, []);
             }
@@ -223,6 +233,18 @@ serve(async (req) => {
         slotStart: number,
         slotEnd: number
       ): boolean {
+        // Check date range exceptions first (e.g., vacation blocks)
+        for (const range of dateRangeExceptions) {
+          if (dateStr >= range.startDate && dateStr <= range.endDate) {
+            const blockStart = timeToMinutes(range.startTime);
+            const blockEnd = timeToMinutes(range.endTime);
+            // Check if slot overlaps with blocked interval
+            if (slotStart < blockEnd && slotEnd > blockStart) {
+              return true;
+            }
+          }
+        }
+        
         // Check specific date blocks
         const dateBlocks = blockExceptionsByDate.get(dateStr) || [];
         for (const block of dateBlocks) {
@@ -1244,6 +1266,7 @@ serve(async (req) => {
           is_recurring: body.is_recurring,
           description: body.description,
           date: body.date,
+          end_date: body.end_date,
           day_of_week: body.day_of_week,
         })
         .eq('id', exceptionId);

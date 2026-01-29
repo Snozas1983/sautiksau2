@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Save, Loader2, Shield, Calendar, CheckCircle2, AlertCircle, Play, RefreshCw, CalendarIcon } from 'lucide-react';
+import { Save, Loader2, Shield, Calendar, CheckCircle2, AlertCircle, Play, RefreshCw, CalendarIcon, Plus, Trash2, CalendarOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TimeInput } from '@/components/ui/time-input';
@@ -13,6 +13,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { airtableApi } from '@/lib/airtable';
 import { toast } from 'sonner';
 import { useGoogleCalendar } from '@/hooks/useGoogleCalendar';
+import { useScheduleExceptions, useDeleteException, ScheduleException } from '@/hooks/useScheduleExceptions';
+import { DateRangeExceptionDialog } from './DateRangeExceptionDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { format, addDays } from 'date-fns';
 import { lt } from 'date-fns/locale';
@@ -46,6 +48,8 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
   const [isRunningSystemBookings, setIsRunningSystemBookings] = useState(false);
   const [syncStartDate, setSyncStartDate] = useState<Date>(new Date());
   const [syncEndDate, setSyncEndDate] = useState<Date>(addDays(new Date(), 60));
+  const [isExceptionDialogOpen, setIsExceptionDialogOpen] = useState(false);
+  const [editingException, setEditingException] = useState<ScheduleException | null>(null);
   const queryClient = useQueryClient();
   
   const { 
@@ -54,6 +58,28 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
     fullSync,
     isFullSyncing
   } = useGoogleCalendar(adminPassword);
+
+  // Fetch schedule exceptions
+  const { data: exceptions, isLoading: isExceptionsLoading, refetch: refetchExceptions } = useScheduleExceptions(adminPassword);
+  const deleteExceptionMutation = useDeleteException();
+
+  // Filter to show only date range exceptions (those with end_date)
+  const dateRangeExceptions = (exceptions || []).filter(ex => ex.end_date !== null);
+
+  const handleDeleteException = async (exceptionId: string) => {
+    try {
+      await deleteExceptionMutation.mutateAsync({ exceptionId, adminPassword });
+      toast.success('Išimtis ištrinta');
+      refetchExceptions();
+    } catch (error) {
+      toast.error('Klaida trinant išimtį');
+    }
+  };
+
+  const handleEditException = (exception: ScheduleException) => {
+    setEditingException(exception);
+    setIsExceptionDialogOpen(true);
+  };
 
   // Handle Google OAuth callback
   useEffect(() => {
@@ -417,6 +443,97 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
           )}
         </CardContent>
       </Card>
+      
+      {/* Calendar Disabling / Date Range Exceptions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <CalendarOff className="w-4 h-4" />
+            Kalendoriaus išjungimai
+          </CardTitle>
+          <CardDescription>
+            Blokuoti registraciją tam tikram laikotarpiui (atostogos, remontas ir pan.)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setEditingException(null);
+              setIsExceptionDialogOpen(true);
+            }}
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Pridėti naują
+          </Button>
+
+          {isExceptionsLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Kraunama...
+            </div>
+          ) : dateRangeExceptions.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nėra nustatytų kalendoriaus išjungimų
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {dateRangeExceptions.map((exception) => {
+                const isFullDay = exception.start_time === '00:00:00' || exception.start_time === '00:00';
+                return (
+                  <div
+                    key={exception.id}
+                    className="flex items-center justify-between p-3 border rounded-lg"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <CalendarIcon className="w-4 h-4 text-muted-foreground" />
+                        <span className="font-medium text-sm">
+                          {format(new Date(exception.date!), 'yyyy-MM-dd')} — {format(new Date(exception.end_date!), 'yyyy-MM-dd')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {exception.description || (isFullDay ? 'Visa diena' : `${exception.start_time?.substring(0, 5)} - ${exception.end_time?.substring(0, 5)}`)}
+                        {!isFullDay && exception.description && ` (${exception.start_time?.substring(0, 5)} - ${exception.end_time?.substring(0, 5)})`}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditException(exception)}
+                      >
+                        Redaguoti
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDeleteException(exception.id)}
+                        disabled={deleteExceptionMutation.isPending}
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Date Range Exception Dialog */}
+      <DateRangeExceptionDialog
+        open={isExceptionDialogOpen}
+        onClose={() => {
+          setIsExceptionDialogOpen(false);
+          setEditingException(null);
+        }}
+        adminPassword={adminPassword}
+        onExceptionCreated={refetchExceptions}
+        existingException={editingException}
+      />
       
       {/* System Bookings */}
       <Card>

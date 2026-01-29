@@ -248,6 +248,7 @@ export type Database = {
           date: string | null
           day_of_week: number | null
           description: string | null
+          end_date: string | null
           end_time: string
           exception_type: string
           id: string
@@ -259,6 +260,7 @@ export type Database = {
           date?: string | null
           day_of_week?: number | null
           description?: string | null
+          end_date?: string | null
           end_time: string
           exception_type: string
           id?: string
@@ -270,6 +272,7 @@ export type Database = {
           date?: string | null
           day_of_week?: number | null
           description?: string | null
+          end_date?: string | null
           end_time?: string
           exception_type?: string
           id?: string

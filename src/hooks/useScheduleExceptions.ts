@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 export interface ScheduleException {
   id: string;
   date: string | null;
+  end_date: string | null;
   day_of_week: number | null;
   start_time: string;
   end_time: string;
