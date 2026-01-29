@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { lt } from 'date-fns/locale';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { TimeInput } from '@/components/ui/time-input';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -47,6 +50,8 @@ export function ExceptionDialog({
     { id: '1', startTime: '09:00', endTime: '18:00' },
   ]);
   const [isRecurring, setIsRecurring] = useState(false);
+  const [isDateRange, setIsDateRange] = useState(false);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -66,12 +71,16 @@ export function ExceptionDialog({
       setIsFullDay(isFullDayException);
       setIntervals([{ id: '1', startTime, endTime }]);
       setIsRecurring(existingException.is_recurring);
+      setIsDateRange(!!existingException.end_date);
+      setEndDate(existingException.end_date ? new Date(existingException.end_date) : undefined);
       setDescription(existingException.description || '');
     } else {
       // Reset to defaults for new exception
       setIsFullDay(true);
       setIntervals([{ id: '1', startTime: '09:00', endTime: '18:00' }]);
       setIsRecurring(false);
+      setIsDateRange(false);
+      setEndDate(undefined);
       setDescription('');
     }
   }, [existingException, open]);
@@ -102,6 +111,16 @@ export function ExceptionDialog({
   };
 
   const handleSubmit = async () => {
+    // Validation for date range
+    if (isDateRange && !endDate) {
+      toast.error('Pasirinkite pabaigos datą');
+      return;
+    }
+    if (isDateRange && endDate && endDate < selectedDate) {
+      toast.error('Pabaigos data negali būti ankstesnė už pradžios datą');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const isEditing = !!existingException;
@@ -109,13 +128,14 @@ export function ExceptionDialog({
       if (isEditing) {
         // Update existing exception
         const payload = {
-          start_time: intervals[0].startTime,
-          end_time: intervals[0].endTime,
+          start_time: isFullDay ? '00:00' : intervals[0].startTime,
+          end_time: isFullDay ? '23:59' : intervals[0].endTime,
           exception_type: exceptionType,
-          is_recurring: isRecurring,
+          is_recurring: isDateRange ? false : isRecurring,
           description: description || null,
-          date: isRecurring ? null : format(selectedDate, 'yyyy-MM-dd'),
-          day_of_week: isRecurring ? dayOfWeek : null,
+          date: isRecurring && !isDateRange ? null : format(selectedDate, 'yyyy-MM-dd'),
+          end_date: isDateRange && endDate ? format(endDate, 'yyyy-MM-dd') : null,
+          day_of_week: isRecurring && !isDateRange ? dayOfWeek : null,
         };
 
         const response = await fetch(
@@ -139,14 +159,18 @@ export function ExceptionDialog({
         // Create new exception(s)
         for (const interval of intervals) {
           const payload: Record<string, any> = {
-            start_time: interval.startTime,
-            end_time: interval.endTime,
+            start_time: isFullDay ? '00:00' : interval.startTime,
+            end_time: isFullDay ? '23:59' : interval.endTime,
             exception_type: exceptionType,
-            is_recurring: isRecurring,
+            is_recurring: isDateRange ? false : isRecurring,
             description: description || null,
           };
 
-          if (isRecurring) {
+          if (isDateRange) {
+            payload.date = format(selectedDate, 'yyyy-MM-dd');
+            payload.end_date = endDate ? format(endDate, 'yyyy-MM-dd') : null;
+            payload.day_of_week = null;
+          } else if (isRecurring) {
             payload.day_of_week = dayOfWeek;
           } else {
             payload.date = format(selectedDate, 'yyyy-MM-dd');
@@ -186,6 +210,8 @@ export function ExceptionDialog({
     setIsFullDay(true);
     setIntervals([{ id: '1', startTime: '09:00', endTime: '18:00' }]);
     setIsRecurring(false);
+    setIsDateRange(false);
+    setEndDate(undefined);
     setDescription('');
     onClose();
   };
@@ -263,22 +289,82 @@ export function ExceptionDialog({
             </div>
           )}
 
-          {/* Recurring toggle */}
-          <div className="flex items-start gap-3 pt-2">
-            <Checkbox
-              id="recurring"
-              checked={isRecurring}
-              onCheckedChange={(checked) => setIsRecurring(checked === true)}
-            />
-            <div className="grid gap-1.5 leading-none">
-              <Label htmlFor="recurring" className="cursor-pointer">
-                Kartoti kiekvieną savaitę
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                Ši išimtis bus taikoma kiekvieną {dayNames[dayOfWeek].toLowerCase()}
-              </p>
+          {/* Date range option - only for blocking, not weekends */}
+          {!isWeekend && (
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="date-range"
+                  checked={isDateRange}
+                  onCheckedChange={(checked) => {
+                    setIsDateRange(checked === true);
+                    if (checked) {
+                      setIsRecurring(false);
+                    }
+                  }}
+                />
+                <div className="grid gap-1.5 leading-none">
+                  <Label htmlFor="date-range" className="cursor-pointer">
+                    Kelios dienos (atostogos)
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Blokuoti visas dienas nuo šios datos iki pabaigos datos
+                  </p>
+                </div>
+              </div>
+              
+              {isDateRange && (
+                <div className="space-y-2 pl-7">
+                  <Label>Iki datos</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          'w-full justify-start text-left font-normal',
+                          !endDate && 'text-muted-foreground'
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {endDate 
+                          ? format(endDate, 'yyyy-MM-dd') 
+                          : 'Pasirinkite pabaigos datą'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={endDate}
+                        onSelect={setEndDate}
+                        disabled={(date) => date < selectedDate}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
             </div>
-          </div>
+          )}
+
+          {/* Recurring toggle - hidden when date range is selected */}
+          {!isDateRange && (
+            <div className="flex items-start gap-3 pt-2">
+              <Checkbox
+                id="recurring"
+                checked={isRecurring}
+                onCheckedChange={(checked) => setIsRecurring(checked === true)}
+              />
+              <div className="grid gap-1.5 leading-none">
+                <Label htmlFor="recurring" className="cursor-pointer">
+                  Kartoti kiekvieną savaitę
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Ši išimtis bus taikoma kiekvieną {dayNames[dayOfWeek].toLowerCase()}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Description */}
           <div className="space-y-2">
