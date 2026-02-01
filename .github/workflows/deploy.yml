@@ -1,4 +1,4 @@
-name: Deploy Lovable
+name: Deploy Lovable Project
 on:
   push:
     branches:
@@ -20,7 +20,7 @@ jobs:
           npm install
           npm run build
 
-      - name: 📂 Keliama į Hostinger (TIK dist turinis)
+      - name: 📂 Keliama į Hostinger
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
           server: ${{ secrets.FTP_SERVER }}
