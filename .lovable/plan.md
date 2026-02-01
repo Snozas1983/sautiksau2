@@ -1,84 +1,166 @@
 
 
-# Planas: Pridėti Supabase aplinkos kintamuosius į GitHub Actions
+# Planas: Pagreitinti kalendoriaus užkrovimą
 
 ## Problema
-GitHub Actions workflow neturi Supabase aplinkos kintamųjų (`VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`), todėl `npm run build` sukuria aplikaciją be backend prisijungimo ir kalendorius neveikia.
+Kalendoriaus prieinamumo užkrovimas užtrunka ilgai, nes:
+1. Backend kiekvieną kartą skaičiuoja 45 dienų prieinamumą (apie 1000 slotų)
+2. Atliekamos 3 atskiros duomenų bazės užklausos (settings, bookings, exceptions)
+3. Nėra jokio serverio pusės kešavimo
+4. Frontend cache galioja tik 2 minutes
 
 ## Sprendimas
 
-### 1 žingsnis: Pridėti GitHub Secrets (rankiniu būdu)
+Siūlau **3 optimizacijas**, kurios drauge sumažins užkrovimo laiką 3-5x:
 
-Eik į GitHub → `Snozas1983/sautiksau2` → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
+### 1. Lygiagrečios duomenų bazės užklausos (Backend)
+Vietoj 3 nuoseklių užklausų, vykdyti jas lygiagrečiai su `Promise.all()`.
 
-Pridėk šiuos du secrets:
-
-| Secret Name | Value |
-|-------------|-------|
-| `VITE_SUPABASE_URL` | `https://gwjdijkbmesjoqmfepkc.supabase.co` |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3amRpamtibWVzam9xbWZlcGtjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczNTQyMDEsImV4cCI6MjA4MjkzMDIwMX0.CuOukchqVf6Pq69FVYKsxTsZA2YavCAMVmsFLSnzw7E` |
-
-### 2 žingsnis: Atnaujinti deploy.yml
-
-Pakeisti build žingsnį, kad naudotų aplinkos kintamuosius:
-
-```yaml
-- name: 📦 Instaliuojama ir gaminama (Build)
-  env:
-    VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-    VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-  run: |
-    npm install
-    npm run build
+**Dabartinis kodas:**
+```typescript
+const settings = await getSettings();
+const { data: bookingsData } = await supabaseAdmin.from('bookings')...;
+const { data: exceptionsData } = await supabaseAdmin.from('schedule_exceptions')...;
 ```
+
+**Naujas kodas:**
+```typescript
+const [settings, bookingsResult, exceptionsResult] = await Promise.all([
+  getSettings(),
+  supabaseAdmin.from('bookings')...,
+  supabaseAdmin.from('schedule_exceptions')...,
+]);
+```
+
+**Rezultatas:** ~60-70% greičiau (3 užklausos per ~100ms vietoj ~300ms)
+
+### 2. Cache-Control header (Backend)
+Pridėti HTTP cache header, kad naršyklė ir CDN galėtų kešuoti atsakymą 1 minutę.
+
+```typescript
+return new Response(JSON.stringify({ availability, maxDate }), {
+  headers: { 
+    ...corsHeaders, 
+    'Content-Type': 'application/json',
+    'Cache-Control': 'public, max-age=60, stale-while-revalidate=120',
+  },
+});
+```
+
+**Rezultatas:** Pakartotinės užklausos per 1 min bus iš cache (~0ms)
+
+### 3. Ilgesnis frontend cache (Frontend)
+Padidinti React Query `staleTime` nuo 2 min iki 5 min.
+
+```typescript
+staleTime: 5 * 60 * 1000, // 5 minutes (vietoj 2)
+```
+
+**Rezultatas:** Mažiau užklausų į serverį, greitesnis navigavimas tarp paslaugų
+
+### 4. Skeleton loading (UI)
+Vietoj "Kraunama prieinamumas..." teksto, rodyti kalendoriaus skeleton, kad vartotojas matytų progresą.
 
 ## Failų pakeitimai
 
 | Failas | Pakeitimas |
 |--------|------------|
-| `.github/workflows/deploy.yml` | Pridėti `env:` bloką su Supabase kintamaisiais prie build žingsnio (eilutės 18-21) |
+| `supabase/functions/airtable-proxy/index.ts` | Lygiagrečios užklausos + Cache-Control header |
+| `src/hooks/useCalendarAvailability.ts` | Padidinti staleTime iki 5 min |
+| `src/components/booking/BookingSection.tsx` | Pridėti skeleton loading UI |
+| `src/components/booking/CalendarSkeleton.tsx` | Naujas komponentas skeleton loading |
 
-## Po pakeitimo
+## Techninis planas
 
-```yaml
-name: Deploy Lovable Project
-on:
-  push:
-    branches:
-      - main
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: 🚚 Parsiunčiamas kodas
-        uses: actions/checkout@v4
+### A. Backend optimizacija (`airtable-proxy/index.ts`)
 
-      - name: 🟢 Paruošiamas Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+**Eilutės 108-145** - pakeisti į:
 
-      - name: 📦 Instaliuojama ir gaminama (Build)
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-        run: |
-          npm install
-          npm run build
+```typescript
+// Run all queries in parallel for faster response
+const [settings, bookingsResult, exceptionsResult] = await Promise.all([
+  getSettings(),
+  supabaseAdmin
+    .from('bookings')
+    .select('date, start_time, end_time')
+    .gte('date', startDateStr)
+    .lte('date', endDateStr)
+    .eq('status', 'confirmed'),
+  supabaseAdmin
+    .from('schedule_exceptions')
+    .select('*'),
+]);
 
-      - name: 📂 Keliama į Hostinger
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
-        with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          local-dir: ./dist/
-          server-dir: ./public_html/
-          dangerous-clean-slate: true
+if (bookingsResult.error) throw bookingsResult.error;
+if (exceptionsResult.error) throw exceptionsResult.error;
+
+const bookingsData = bookingsResult.data;
+const exceptionsData = exceptionsResult.data;
+const workStart = settings['work_start'] || '09:00';
+const workEnd = settings['work_end'] || '18:00';
+const breakBetween = parseInt(settings['break_between'] || '0');
 ```
 
-## Rezultatas
-- Build procesas turės prieigą prie Supabase
-- Kalendorius ir visos funkcijos veiks Hostinger svetainėje
-- Po push į main, automatiškai bus įkelta nauja versija
+**Eilutė 356-361** - pridėti Cache-Control:
+
+```typescript
+return new Response(JSON.stringify({ 
+  availability,
+  maxDate: endDateStr,
+}), {
+  headers: { 
+    ...corsHeaders, 
+    'Content-Type': 'application/json',
+    'Cache-Control': 'public, max-age=60, stale-while-revalidate=120',
+  },
+});
+```
+
+### B. Frontend cache (`useCalendarAvailability.ts`)
+
+```typescript
+staleTime: 5 * 60 * 1000, // 5 minutes
+```
+
+### C. Skeleton komponentas (`CalendarSkeleton.tsx`)
+
+```tsx
+export const CalendarSkeleton = () => (
+  <div className="space-y-4 animate-pulse">
+    <div className="h-6 w-24 bg-booking-border rounded" />
+    <div className="bg-booking-surface rounded-sm p-3">
+      <div className="flex justify-between mb-3">
+        <div className="h-4 w-4 bg-booking-border rounded" />
+        <div className="h-4 w-32 bg-booking-border rounded" />
+        <div className="h-4 w-4 bg-booking-border rounded" />
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 mb-1">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className="h-4 bg-booking-border rounded mx-1" />
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {Array.from({ length: 35 }).map((_, i) => (
+          <div key={i} className="aspect-square bg-booking-border rounded-sm" />
+        ))}
+      </div>
+    </div>
+  </div>
+);
+```
+
+## Tikėtinas rezultatas
+
+| Metrika | Dabar | Po optimizacijos |
+|---------|-------|------------------|
+| Pirmas užkrovimas | ~800-1200ms | ~300-500ms |
+| Pakartotinis (cache) | ~800-1200ms | ~0-50ms |
+| Keitimas tarp paslaugų | ~800-1200ms | ~0ms (cache) |
+
+## Eiliškumas
+
+1. Backend lygiagrečios užklausos (didžiausias poveikis)
+2. Cache-Control header
+3. Frontend staleTime
+4. Skeleton UI (vizualinis pagerinimas)
 
