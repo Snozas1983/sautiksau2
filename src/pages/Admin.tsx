@@ -88,6 +88,27 @@ const Admin = () => {
             {isLoading ? 'Tikrinama...' : 'Prisijungti'}
           </Button>
         </form>
+        
+        <div className="text-center mt-4">
+          <button
+            type="button"
+            className="text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+            onClick={async () => {
+              try {
+                const result = await airtableApi('/admin/forgot-password', {
+                  method: 'POST',
+                });
+                if (result.success) {
+                  toast.success('Nuoroda išsiųsta į el. paštą');
+                }
+              } catch {
+                toast.error('Nepavyko išsiųsti el. laiško');
+              }
+            }}
+          >
+            Pamiršau slaptažodį
+          </button>
+        </div>
       </div>
     </div>
   );

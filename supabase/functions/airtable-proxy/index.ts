@@ -857,8 +857,204 @@ serve(async (req) => {
       });
     }
 
+    // POST /admin/forgot-password - Send password reset email
+    if (path === '/admin/forgot-password' && req.method === 'POST') {
+      const settings = await getSettings();
+      const contactEmail = settings['contact_email'] || 'info@sautiksau.lt';
+      
+      // Generate reset token
+      const resetToken = crypto.randomUUID();
+      const expiresAt = Date.now() + 3600000; // 1 hour
+      const resetValue = `${resetToken}:${expiresAt}`;
+      
+      // Save token to settings
+      const { error: upsertError } = await supabaseAdmin
+        .from('settings')
+        .upsert(
+          { key: 'password_reset_token', value: resetValue, updated_at: new Date().toISOString() },
+          { onConflict: 'key' }
+        );
+      
+      if (upsertError) {
+        console.error('Error saving reset token:', upsertError);
+        return new Response(JSON.stringify({ error: 'Klaida saugant token' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Determine the site URL for the reset link
+      const origin = req.headers.get('origin') || 'https://sau-tik-sau-zen.lovable.app';
+      const resetUrl = `${origin}/admin/reset-password?token=${resetToken}`;
+      
+      // Send email via Resend
+      const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+      if (!RESEND_API_KEY) {
+        console.error('RESEND_API_KEY not configured');
+        return new Response(JSON.stringify({ error: 'El. pašto konfigūracija nerasta' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      const emailHtml = `
+        <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+          <h2>Slaptažodžio atstatymas</h2>
+          <p>Gavome prašymą atstatyti admin slaptažodį.</p>
+          <p>Spauskite žemiau esantį mygtuką, kad nustatytumėte naują slaptažodį:</p>
+          <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background: #1a1a1a; color: #fff; text-decoration: none; border-radius: 6px; margin: 16px 0;">Atstatyti slaptažodį</a>
+          <p style="color: #666; font-size: 14px;">Nuoroda galioja 1 valandą. Jei neprašėte atstatymo, ignoruokite šį laišką.</p>
+        </div>
+      `;
+      
+      let emailSent = false;
+      
+      // Try primary sender
+      try {
+        const res = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${RESEND_API_KEY}`,
+          },
+          body: JSON.stringify({
+            from: 'info@sautiksau.lt',
+            to: [contactEmail],
+            subject: 'Slaptažodžio atstatymas – SauTikSau',
+            html: emailHtml,
+          }),
+        });
+        
+        if (res.ok) {
+          emailSent = true;
+          console.log('Reset email sent to:', contactEmail);
+        } else {
+          console.error('Primary sender failed:', await res.text());
+        }
+      } catch (e) {
+        console.error('Primary sender error:', e);
+      }
+      
+      // Failover sender
+      if (!emailSent) {
+        try {
+          const res = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${RESEND_API_KEY}`,
+            },
+            body: JSON.stringify({
+              from: 'onboarding@resend.dev',
+              to: [contactEmail],
+              reply_to: 'info@sautiksau.lt',
+              subject: 'Slaptažodžio atstatymas – SauTikSau',
+              html: emailHtml,
+            }),
+          });
+          
+          if (res.ok) {
+            emailSent = true;
+            console.log('Reset email sent via failover to:', contactEmail);
+          } else {
+            console.error('Failover sender failed:', await res.text());
+          }
+        } catch (e) {
+          console.error('Failover sender error:', e);
+        }
+      }
+      
+      if (!emailSent) {
+        return new Response(JSON.stringify({ error: 'Nepavyko išsiųsti el. laiško' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // POST /admin/reset-password - Reset password using token
+    if (path === '/admin/reset-password' && req.method === 'POST') {
+      const body = await req.json();
+      const { token, newPassword } = body;
+      
+      if (!token || !newPassword) {
+        return new Response(JSON.stringify({ error: 'Trūksta laukų' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Look up token
+      const { data: tokenData } = await supabaseAdmin
+        .from('settings')
+        .select('value')
+        .eq('key', 'password_reset_token')
+        .single();
+      
+      if (!tokenData?.value) {
+        return new Response(JSON.stringify({ error: 'Netinkama arba pasibaigusi nuoroda' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      const [storedToken, expiresAtStr] = tokenData.value.split(':');
+      const expiresAt = parseInt(expiresAtStr);
+      
+      if (storedToken !== token || Date.now() > expiresAt) {
+        return new Response(JSON.stringify({ error: 'Netinkama arba pasibaigusi nuoroda' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Validate new password
+      const validation = validatePasswordStrength(newPassword);
+      if (!validation.valid) {
+        return new Response(JSON.stringify({ error: 'Slaptažodis neatitinka reikalavimų', details: validation.errors }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Hash and save new password
+      const salt = generateSalt();
+      const hash = await hashPassword(newPassword, salt);
+      const hashValue = `${salt}:${hash}`;
+      
+      const { error: saveError } = await supabaseAdmin
+        .from('settings')
+        .upsert(
+          { key: 'admin_password_hash', value: hashValue, updated_at: new Date().toISOString() },
+          { onConflict: 'key' }
+        );
+      
+      if (saveError) {
+        console.error('Error saving new password:', saveError);
+        return new Response(JSON.stringify({ error: 'Klaida saugant slaptažodį' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Delete the reset token (consume it)
+      await supabaseAdmin
+        .from('settings')
+        .delete()
+        .eq('key', 'password_reset_token');
+      
+      console.log('Password reset successfully via token');
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Check admin auth for other admin endpoints
-    if (path.startsWith('/admin/') && path !== '/admin/login' && path !== '/admin/change-password') {
+    if (path.startsWith('/admin/') && path !== '/admin/login' && path !== '/admin/change-password' && path !== '/admin/forgot-password' && path !== '/admin/reset-password') {
       if (!adminPassword || !(await verifyAdminPassword(adminPassword))) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
           status: 401,
