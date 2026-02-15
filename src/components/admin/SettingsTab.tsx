@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Save, Loader2, Shield, Calendar, CheckCircle2, AlertCircle, Play, RefreshCw, CalendarIcon, Plus, Trash2, CalendarOff } from 'lucide-react';
+import { Save, Loader2, Shield, Calendar, CheckCircle2, AlertCircle, Play, RefreshCw, CalendarIcon, Plus, Trash2, CalendarOff, Lock, Eye, EyeOff, Check, X as XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TimeInput } from '@/components/ui/time-input';
@@ -150,7 +150,7 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
         // Contact information
         contact_name: settings['contact_name'] || '',
         contact_phone: settings['contact_phone'] || '+37062082478',
-        contact_email: settings['contact_email'] || 'info@sautiksau.lt',
+        contact_email: settings['contact_email'] || 'ausra.banys@gmail.com',
         contact_facebook: settings['contact_facebook'] || 'https://www.facebook.com/sautiksau',
         contact_instagram: settings['contact_instagram'] || 'https://www.instagram.com/sautiksaumasazas/',
       });
@@ -623,6 +623,9 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
         </CardContent>
       </Card>
       
+      {/* Password Change */}
+      <PasswordChangeCard adminPassword={adminPassword} />
+      
       {/* Save Button */}
       <Button 
         onClick={handleSave} 
@@ -637,5 +640,155 @@ export function SettingsTab({ adminPassword }: SettingsTabProps) {
         Išsaugoti
       </Button>
     </div>
+  );
+}
+
+// Password validation helpers
+function checkPasswordStrength(password: string) {
+  return {
+    minLength: password.length >= 8,
+    hasUppercase: /[A-Z]/.test(password),
+    hasLowercase: /[a-z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+    hasSpecial: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password),
+  };
+}
+
+function PasswordChangeCard({ adminPassword }: { adminPassword: string }) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [isChanging, setIsChanging] = useState(false);
+
+  const checks = checkPasswordStrength(newPassword);
+  const passwordsMatch = newPassword.length > 0 && newPassword === confirmPassword;
+  const allValid = checks.minLength && checks.hasUppercase && checks.hasLowercase && checks.hasNumber && checks.hasSpecial && passwordsMatch;
+
+  const handleChangePassword = async () => {
+    if (!allValid) return;
+    setIsChanging(true);
+    try {
+      const result = await airtableApi('/admin/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword }),
+      }, adminPassword);
+
+      if (result.success) {
+        // Update session with new password
+        sessionStorage.setItem('admin_session', newPassword);
+        toast.success('Slaptažodis pakeistas sėkmingai');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Klaida keičiant slaptažodį';
+      toast.error(message);
+    } finally {
+      setIsChanging(false);
+    }
+  };
+
+  const ValidationItem = ({ valid, label }: { valid: boolean; label: string }) => (
+    <div className="flex items-center gap-2 text-sm">
+      {valid ? (
+        <Check className="w-4 h-4 text-emerald-600" />
+      ) : (
+        <XIcon className="w-4 h-4 text-muted-foreground" />
+      )}
+      <span className={valid ? 'text-emerald-600' : 'text-muted-foreground'}>{label}</span>
+    </div>
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          <Lock className="w-4 h-4" />
+          Slaptažodžio keitimas
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label>Dabartinis slaptažodis</Label>
+          <div className="relative">
+            <Input
+              type={showCurrent ? 'text' : 'password'}
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              placeholder="Įveskite dabartinį slaptažodį"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 top-0 h-full"
+              onClick={() => setShowCurrent(!showCurrent)}
+            >
+              {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Naujas slaptažodis</Label>
+          <div className="relative">
+            <Input
+              type={showNew ? 'text' : 'password'}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Įveskite naują slaptažodį"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 top-0 h-full"
+              onClick={() => setShowNew(!showNew)}
+            >
+              {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Pakartokite naują slaptažodį</Label>
+          <Input
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Pakartokite naują slaptažodį"
+          />
+        </div>
+
+        {newPassword.length > 0 && (
+          <div className="space-y-1 p-3 rounded-lg bg-muted/50">
+            <ValidationItem valid={checks.minLength} label="Mažiausiai 8 simboliai" />
+            <ValidationItem valid={checks.hasUppercase} label="Bent viena didžioji raidė (A-Z)" />
+            <ValidationItem valid={checks.hasLowercase} label="Bent viena mažoji raidė (a-z)" />
+            <ValidationItem valid={checks.hasNumber} label="Bent vienas skaičius (0-9)" />
+            <ValidationItem valid={checks.hasSpecial} label="Bent vienas specialus simbolis (!@#$...)" />
+            {confirmPassword.length > 0 && (
+              <ValidationItem valid={passwordsMatch} label="Slaptažodžiai sutampa" />
+            )}
+          </div>
+        )}
+
+        <Button
+          onClick={handleChangePassword}
+          disabled={!allValid || !currentPassword || isChanging}
+          className="w-full"
+        >
+          {isChanging ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Lock className="w-4 h-4 mr-2" />
+          )}
+          Keisti slaptažodį
+        </Button>
+      </CardContent>
+    </Card>
   );
 }
