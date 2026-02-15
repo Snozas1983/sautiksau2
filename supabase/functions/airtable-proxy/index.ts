@@ -34,10 +34,51 @@ async function getSettings(): Promise<Record<string, string>> {
   return settings;
 }
 
-// Verify admin password using Supabase Secret
-function verifyAdminPassword(password: string): boolean {
+// Hash password with salt using SHA-256
+async function hashPassword(password: string, salt: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(salt + password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Generate random salt
+function generateSalt(): string {
+  const array = new Uint8Array(16);
+  crypto.getRandomValues(array);
+  return Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Verify admin password - checks DB hash first, then env fallback
+async function verifyAdminPassword(password: string): Promise<boolean> {
+  // First check if there's a hashed password in settings
+  const { data } = await supabaseAdmin
+    .from('settings')
+    .select('value')
+    .eq('key', 'admin_password_hash')
+    .single();
+  
+  if (data?.value) {
+    const [salt, hash] = data.value.split(':');
+    const computedHash = await hashPassword(password, salt);
+    return computedHash === hash;
+  }
+  
+  // Fallback to env secret
   const adminPassword = Deno.env.get('ADMIN_PASSWORD');
   return password === adminPassword;
+}
+
+// Validate password strength
+function validatePasswordStrength(password: string): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  if (password.length < 8) errors.push('Mažiausiai 8 simboliai');
+  if (!/[A-Z]/.test(password)) errors.push('Bent viena didžioji raidė');
+  if (!/[a-z]/.test(password)) errors.push('Bent viena mažoji raidė');
+  if (!/[0-9]/.test(password)) errors.push('Bent vienas skaičius');
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) errors.push('Bent vienas specialus simbolis');
+  return { valid: errors.length === 0, errors };
 }
 
 function decodeBase64Utf8(value: string): string {
@@ -752,16 +793,73 @@ serve(async (req) => {
     // POST /admin/login - Verify admin password
     if (path === '/admin/login' && req.method === 'POST') {
       const body = await req.json();
-      const isValid = verifyAdminPassword(body.password);
+      const isValid = await verifyAdminPassword(body.password);
 
       return new Response(JSON.stringify({ success: isValid }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    // POST /admin/change-password - Change admin password
+    if (path === '/admin/change-password' && req.method === 'POST') {
+      const body = await req.json();
+      const { currentPassword, newPassword } = body;
+      
+      if (!currentPassword || !newPassword) {
+        return new Response(JSON.stringify({ error: 'Trūksta laukų' }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Verify current password
+      const isCurrentValid = await verifyAdminPassword(currentPassword);
+      if (!isCurrentValid) {
+        return new Response(JSON.stringify({ error: 'Neteisingas dabartinis slaptažodis' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Validate new password strength
+      const validation = validatePasswordStrength(newPassword);
+      if (!validation.valid) {
+        return new Response(JSON.stringify({ error: 'Slaptažodis neatitinka reikalavimų', details: validation.errors }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Hash new password with salt
+      const salt = generateSalt();
+      const hash = await hashPassword(newPassword, salt);
+      const hashValue = `${salt}:${hash}`;
+      
+      // Save to settings table
+      const { error: upsertError } = await supabaseAdmin
+        .from('settings')
+        .upsert(
+          { key: 'admin_password_hash', value: hashValue, updated_at: new Date().toISOString() },
+          { onConflict: 'key' }
+        );
+      
+      if (upsertError) {
+        console.error('Error saving password hash:', upsertError);
+        return new Response(JSON.stringify({ error: 'Klaida saugant slaptažodį' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      console.log('Admin password changed successfully');
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Check admin auth for other admin endpoints
-    if (path.startsWith('/admin/') && path !== '/admin/login') {
-      if (!adminPassword || !verifyAdminPassword(adminPassword)) {
+    if (path.startsWith('/admin/') && path !== '/admin/login' && path !== '/admin/change-password') {
+      if (!adminPassword || !(await verifyAdminPassword(adminPassword))) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), {
           status: 401,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
