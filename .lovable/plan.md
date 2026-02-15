@@ -1,30 +1,51 @@
 
 
-# Planas: Apsauginė RLS SELECT politika `bookings` lentelei
+# Planas: "Pamiršau slaptažodį" funkcija admin prisijungimui
 
-## Kas bus padaryta
+## Kaip tai veiks
 
-Pridėsime SELECT politiką `bookings` lentelei su `USING (false)` -- tai reiškia, kad niekas negali tiesiogiai skaityti rezervacijų duomenų per viešą API. Edge Function ir toliau veiks, nes naudoja `service_role` raktą, kuris apeina RLS.
+1. Admin prisijungimo puslapyje `/admin` atsiras nuoroda **"Pamiršau slaptažodį"**
+2. Paspaudus -- sistema išsiųs el. laišką su slaptažodžio atstatymo nuoroda į admin el. paštą (ausra.banys@gmail.com arba kas nustatyta `contact_email`)
+3. Nuoroda nuves į `/admin/reset-password?token=xxx`
+4. Ten bus forma su nauju slaptažodžiu (su tomis pačiomis validacijos taisyklėmis: 8+ simboliai, didžioji, mažoji, skaičius, spec. simbolis)
+5. Pakeitus slaptažodį -- nukreips į prisijungimo puslapį
 
-## Techninis pakeitimas
+## Saugumas
 
-Viena SQL migracija:
+- Reset token galioja **1 valandą**
+- Token sunaudojamas po panaudojimo (vienkartinis)
+- Token saugomas `settings` lentelėje kaip `password_reset_token` su galiojimo laiku
+- Siunčiama tik į nustatytą admin el. paštą (ne į vartotojo įvestą)
 
-```sql
-CREATE POLICY "No direct select access to bookings"
-  ON public.bookings
-  FOR SELECT
-  USING (false);
-```
+## Techniniai pakeitimai
 
-## Kas pasikeis
+| Failas | Pakeitimas |
+|--------|------------|
+| `supabase/functions/airtable-proxy/index.ts` | 2 nauji endpoint'ai: `POST /admin/forgot-password` ir `POST /admin/reset-password` |
+| `src/pages/Admin.tsx` | Pridėti "Pamiršau slaptažodį" mygtuką ir jo logiką |
+| `src/pages/AdminResetPassword.tsx` | **Naujas failas** -- slaptažodžio atstatymo puslapis |
+| `src/App.tsx` | Pridėti naują route `/admin/reset-password` |
 
-- Klientų vardai, telefonai, el. paštai bus apsaugoti nuo tiesioginės prieigos
-- Admin dashboard, rezervacijų kūrimas ir valdymas veiks kaip ir anksčiau (per Edge Function)
-- Jokių frontend pakeitimų nereikia
+### Backend endpoint'ai
 
-## Kas nepasikeis
+**POST /admin/forgot-password**
+- Sugeneruoja atsitiktinį token'ą (UUID)
+- Išsaugo `settings` lentelėje: `password_reset_token` = `{token}:{expiry_timestamp}`
+- Siunčia el. laišką su nuoroda per Resend API
 
-- Visa esama logika lieka tokia pati
-- Edge Function naudoja `service_role` raktą, todėl RLS jam netaikomas
+**POST /admin/reset-password**
+- Priima: `{ token, newPassword }`
+- Patikrina ar token'as galioja ir nesukęs
+- Validuoja naują slaptažodį
+- Atnaujina `admin_password_hash` settings
+- Ištrina reset token'ą
 
+### Frontend
+
+**Admin.tsx** -- pridedamas mygtukas "Pamiršau slaptažodį", kuris iškviečia `/admin/forgot-password`. Po sėkmingo išsiuntimo rodomas pranešimas "Nuoroda išsiųsta į el. paštą".
+
+**AdminResetPassword.tsx** -- naujas puslapis su:
+- Naujo slaptažodžio įvedimo laukas
+- Pakartojimo laukas
+- Realtime validacijos indikatoriai (kaip nustatymuose)
+- Mygtukas "Pakeisti slaptažodį"
