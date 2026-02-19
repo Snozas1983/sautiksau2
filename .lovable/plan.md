@@ -1,51 +1,58 @@
 
 
-# Planas: "Pamiršau slaptažodį" funkcija admin prisijungimui
+# Planas: Sutvarkyti deployment'ą į sautiksau.lt
 
-## Kaip tai veiks
+## Problema
 
-1. Admin prisijungimo puslapyje `/admin` atsiras nuoroda **"Pamiršau slaptažodį"**
-2. Paspaudus -- sistema išsiųs el. laišką su slaptažodžio atstatymo nuoroda į admin el. paštą (ausra.banys@gmail.com arba kas nustatyta `contact_email`)
-3. Nuoroda nuves į `/admin/reset-password?token=xxx`
-4. Ten bus forma su nauju slaptažodžiu (su tomis pačiomis validacijos taisyklėmis: 8+ simboliai, didžioji, mažoji, skaičius, spec. simbolis)
-5. Pakeitus slaptažodį -- nukreips į prisijungimo puslapį
+GitHub Actions workflow #23 "Add forgot/reset password flow" nepavyko vasario 15 d. Po to daugiau jokiu nauju commit'u i GitHub nebuvo nusiusta, todel sautiksau.lt vis dar rodo sena versija be "Pamirsa slaptazodi" mygtuko.
 
-## Saugumas
+Kodas Lovable aplinkoje yra pilnai teisingas ir veikiantis -- problema tik su deployment pipeline.
 
-- Reset token galioja **1 valandą**
-- Token sunaudojamas po panaudojimo (vienkartinis)
-- Token saugomas `settings` lentelėje kaip `password_reset_token` su galiojimo laiku
-- Siunčiama tik į nustatytą admin el. paštą (ne į vartotojo įvestą)
+## Sprendimas
 
-## Techniniai pakeitimai
+### 1. Patikrinti klaidos priezasti
 
-| Failas | Pakeitimas |
-|--------|------------|
-| `supabase/functions/airtable-proxy/index.ts` | 2 nauji endpoint'ai: `POST /admin/forgot-password` ir `POST /admin/reset-password` |
-| `src/pages/Admin.tsx` | Pridėti "Pamiršau slaptažodį" mygtuką ir jo logiką |
-| `src/pages/AdminResetPassword.tsx` | **Naujas failas** -- slaptažodžio atstatymo puslapis |
-| `src/App.tsx` | Pridėti naują route `/admin/reset-password` |
+Pirmiausia reikia suzinoti, kas tiksliai sukele build klaida. Tam reikia:
 
-### Backend endpoint'ai
+- Eiti i GitHub: https://github.com/Snozas1983/sautiksau2/actions/runs/22033743764
+- Prisijungti prie GitHub paskyros
+- Paspauti ant "build-and-deploy" job'o
+- Perskaityti klaidos zinute (error log)
 
-**POST /admin/forgot-password**
-- Sugeneruoja atsitiktinį token'ą (UUID)
-- Išsaugo `settings` lentelėje: `password_reset_token` = `{token}:{expiry_timestamp}`
-- Siunčia el. laišką su nuoroda per Resend API
+Galimos priezastys:
+- **Truksta GitHub Secrets** -- `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `FTP_SERVER`, `FTP_USERNAME` arba `FTP_PASSWORD` gali buti nesustatyti
+- **Build klaida** -- nors kodas atrodo teisingas, gali buti npm install problema
+- **FTP klaida** -- Hostinger FTP prisijungimo duomenys gali buti pasenesie
 
-**POST /admin/reset-password**
-- Priima: `{ token, newPassword }`
-- Patikrina ar token'as galioja ir nesukęs
-- Validuoja naują slaptažodį
-- Atnaujina `admin_password_hash` settings
-- Ištrina reset token'ą
+### 2. Patikrinti GitHub Secrets
 
-### Frontend
+Eiti i GitHub repozitorija: Settings -> Secrets and variables -> Actions. Patikrinti ar visi 5 secrets yra nustatyti:
 
-**Admin.tsx** -- pridedamas mygtukas "Pamiršau slaptažodį", kuris iškviečia `/admin/forgot-password`. Po sėkmingo išsiuntimo rodomas pranešimas "Nuoroda išsiųsta į el. paštą".
+| Secret | Kam reikalingas |
+|--------|----------------|
+| `VITE_SUPABASE_URL` | Supabase projekto URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon key |
+| `FTP_SERVER` | Hostinger FTP serveris |
+| `FTP_USERNAME` | Hostinger FTP vartotojas |
+| `FTP_PASSWORD` | Hostinger FTP slaptazodis |
 
-**AdminResetPassword.tsx** -- naujas puslapis su:
-- Naujo slaptažodžio įvedimo laukas
-- Pakartojimo laukas
-- Realtime validacijos indikatoriai (kaip nustatymuose)
-- Mygtukas "Pakeisti slaptažodį"
+### 3. Paleisti is naujo
+
+Kai problema bus isspesta, galima:
+- **Variantas A**: GitHub Actions puslapyje paspausti "Re-run all jobs" ant nepavykusio workflow #23
+- **Variantas B**: Padaryti maza pakeitima Lovable, kuris suaktyvins nauja push i GitHub ir nauja deployment'a
+
+### 4. Kas bus po sekmingo deployment'o
+
+Kai build sekmingai praeis, sautiksau.lt/admin puslapyje atsiras:
+- "Pamirsa slaptazodi" nuoroda po prisijungimo formos
+- Slaptazodzio atstatymo puslapis /admin/reset-password
+
+## Veiksmai jums
+
+1. **Atidarykite** https://github.com/Snozas1983/sautiksau2/actions/runs/22033743764 (prisijunge prie GitHub)
+2. **Perskaitykite** klaidos zinute ir pasidalinkite ja su manimi
+3. Arba tiesiog **patikrinkite** GitHub Secrets (Settings -> Secrets) -- jei truksta kurio nors, tai bus priezastis
+
+Kai suziniosime klaidos priezasti, galesiu padeti ja istaisyti.
+
