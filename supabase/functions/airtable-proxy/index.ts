@@ -861,6 +861,7 @@ serve(async (req) => {
     if (path === '/admin/forgot-password' && req.method === 'POST') {
       const settings = await getSettings();
       const contactEmail = settings['contact_email'] || 'info@sautiksau.lt';
+      const adminEmail = settings['admin_email'] || contactEmail;
       
       // Generate reset token
       const resetToken = crypto.randomUUID();
@@ -918,18 +919,19 @@ serve(async (req) => {
             'Authorization': `Bearer ${RESEND_API_KEY}`,
           },
           body: JSON.stringify({
-            from: 'info@sautiksau.lt',
-            to: [contactEmail],
+            from: 'SauTikSau <noreply@sautiksau.lt>',
+            to: [adminEmail],
             subject: 'Slaptažodžio atstatymas – SauTikSau',
             html: emailHtml,
           }),
         });
         
+        const resBody = await res.text();
         if (res.ok) {
           emailSent = true;
-          console.log('Reset email sent to:', contactEmail);
+          console.log('Reset email sent to:', adminEmail, 'Response:', resBody);
         } else {
-          console.error('Primary sender failed:', await res.text());
+          console.error('Primary sender failed:', res.status, resBody);
         }
       } catch (e) {
         console.error('Primary sender error:', e);
@@ -946,18 +948,19 @@ serve(async (req) => {
             },
             body: JSON.stringify({
               from: 'onboarding@resend.dev',
-              to: [contactEmail],
+              to: [adminEmail],
               reply_to: 'info@sautiksau.lt',
               subject: 'Slaptažodžio atstatymas – SauTikSau',
               html: emailHtml,
             }),
           });
           
+          const resBody = await res.text();
           if (res.ok) {
             emailSent = true;
-            console.log('Reset email sent via failover to:', contactEmail);
+            console.log('Reset email sent via failover to:', adminEmail, 'Response:', resBody);
           } else {
-            console.error('Failover sender failed:', await res.text());
+            console.error('Failover sender failed:', res.status, resBody);
           }
         } catch (e) {
           console.error('Failover sender error:', e);
