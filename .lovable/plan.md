@@ -1,47 +1,43 @@
 
-
-# Planas: Sutvarkyti slaptažodžio atstatymo el. laiško pristatymą
+# Sutvarkyti slaptažodžio atstatymo el. laisko pristatyma
 
 ## Problema
 
-Kai paspaudžiate "Pamiršau slaptažodį", backend'as sėkmingai apdoroja užklausą (Resend API grąžina 200), bet el. laiškas nepasiekia gavėjo. Spam aplanke jo taip pat nėra.
-
-## Pagrindinė priežastis
-
-Laiškas siunčiamas **iš** `info@sautiksau.lt` **į** `info@sautiksau.lt` — t.y. pačiam sau. Daugelis el. pašto serverių (ypač Hostinger) tokius laiškus tiesiog atmeta arba ignoruoja, nes atrodo kaip spoofing.
+Slaptazodzio atstatymo laiskas siunciamas is `info@sautiksau.lt` i `info@sautiksau.lt` (ta pati adresa). Hostinger el. pasto serveris tokius laiskus atmeta.
 
 ## Sprendimas
 
-### 1. Pakeisti siuntėjo adresą
+### 1. Prideti `admin_email` nustatyma duomenu bazeje
 
-Vietoj `from: 'info@sautiksau.lt'` naudoti `from: 'SauTikSau <noreply@sautiksau.lt>'` — tai standartinė praktika atstatymo laiškams.
+Ideti nauja irasa i `settings` lentele:
+- `key = 'admin_email'`
+- `value = 'ausra.banys@gmail.com'`
 
-### 2. Siųsti į asmeninį el. paštą
+Tai bus el. pastas, i kuri ateis slaptazodzio atstatymo nuoroda.
 
-Pridėti naują nustatymą `admin_email` duomenų bazėje, kuris nurodytų tikrąjį admin el. paštą (pvz., `ausra.banys@gmail.com`). Slaptažodžio atstatymo laiškai bus siunčiami ten, o ne į `info@sautiksau.lt`.
+### 2. Pakeisti el. laisko siuntimo logika (airtable-proxy)
 
-### 3. Pridėti geresnį klaidų logavimą
+Faile `supabase/functions/airtable-proxy/index.ts`:
 
-Šiuo metu kodas tik tikrina `res.ok`, bet nelogoja Resend API atsakymo body. Pridėsime pilną atsakymo logavimą, kad ateityje būtų lengviau diagnozuoti.
+- **Siuntejas**: pakeisti is `info@sautiksau.lt` i `SauTikSau <noreply@sautiksau.lt>`
+- **Gavejas**: naudoti `admin_email` nustatyma (jei yra), kitaip `contact_email`
+- **Logavimas**: prideti pilna Resend API atsakymo body logavima
 
-## Techniniai pakeitimai
+### Techniniai pakeitimai
 
-### Failas: `supabase/functions/airtable-proxy/index.ts`
+**Duomenu baze** (SQL migracija):
+```text
+INSERT INTO settings (key, value)
+VALUES ('admin_email', 'ausra.banys@gmail.com')
+ON CONFLICT (key) DO UPDATE SET value = 'ausra.banys@gmail.com';
+```
 
-1. Pakeisti `from` lauką iš `info@sautiksau.lt` į `SauTikSau <noreply@sautiksau.lt>`
-2. Pakeisti gavėjo logiką: naudoti `admin_email` nustatymą (jei yra), kitaip `contact_email`
-3. Pridėti Resend API response body logavimą tiek sėkmės, tiek klaidos atvejais
+**Edge funkcija** (`supabase/functions/airtable-proxy/index.ts`):
 
-### Duomenų bazė: `settings` lentelė
+1. Eilute ~863: prideti `admin_email` nuskaityma is settings
+2. Eilute ~921: pakeisti `from: 'info@sautiksau.lt'` i `from: 'SauTikSau <noreply@sautiksau.lt>'`
+3. Eilute ~922: pakeisti `to: [contactEmail]` i `to: [adminEmail]` (kur adminEmail = settings['admin_email'] || contactEmail)
+4. Eilutes ~928-933: prideti response body logavima (`await res.text()` ir sekmes, ir klaidos atvejais)
+5. Failover siuntejui (eilutes ~939-960): taip pat atnaujinti gaveja ir logavima
 
-Pridėti naują įrašą su `key = 'admin_email'` ir `value = 'ausra.banys@gmail.com'` (arba kitas jūsų asmeninis el. paštas).
-
-## Veiksmai jums prieš tai
-
-**Patikrinkite Resend paskyroje:**
-1. Eikite į https://resend.com/domains
-2. Patikrinkite ar `sautiksau.lt` domenas vis dar turi "Verified" statusą
-3. Jei statusas "Pending" arba "Failed" — reikės atnaujinti DNS įrašus
-
-Jei domenas verifikuotas — aš iškart atliksiu kodo pakeitimus ir el. laiškai pradės veikti.
-
+Rezultatas: slaptazodzio atstatymo laiskas bus siunciamas i `ausra.banys@gmail.com`, o ne i `info@sautiksau.lt`.
